@@ -1,0 +1,11 @@
+# SantaCoder environment — MUST pin transformers==4.35.2.
+# transformers >= 4.36 breaks SantaCoder's KV cache (custom modeling code).
+torch>=2.1
+transformers==4.35.2
+datasets>=2.18
+accelerate==0.34.2
+evalplus==0.3.1
+huggingface_hub>=0.23
+numpy
+pyyaml>=6.0
+tqdm>=4.65

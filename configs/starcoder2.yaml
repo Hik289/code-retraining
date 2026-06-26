@@ -1,0 +1,23 @@
+# StarCoder2-3B — bigcode/starcoder2-3b (3B)
+model_id: "bigcode/starcoder2-3b"
+short_name: "starcoder2"
+params: "3B"
+max_context: 16384
+trust_remote_code: false
+
+# transformers version constraint
+transformers_version: ">=4.39"
+
+# FIM tokens
+fim_prefix: "<fim_prefix>"
+fim_middle: "<fim_middle>"
+fim_suffix: "<fim_suffix>"
+fim_pad: "<fim_pad>"
+
+# Binary classifier scoring tokens
+binary_good_token: " good"
+binary_bad_token: " bad"
+
+# Evaluation stop sequences
+stop_sequences_humaneval: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
+stop_sequences_mbpp: ["\nclass ", "\nassert", "\n\"\"\"", "\nprint", "\nif "]

@@ -1,0 +1,23 @@
+# SantaCoder — bigcode/santacoder (1.1B)
+model_id: "bigcode/santacoder"
+short_name: "santacoder"
+params: "1.1B"
+max_context: 2048
+trust_remote_code: true
+
+# transformers version constraint (enforced by venv, documented here)
+transformers_version: "==4.35.2"
+
+# FIM tokens
+fim_prefix: "<fim-prefix>"
+fim_middle: "<fim-middle>"
+fim_suffix: "<fim-suffix>"
+fim_pad: "<fim-pad>"
+
+# Binary classifier scoring tokens
+binary_good_token: " good"
+binary_bad_token: " bad"
+
+# Evaluation stop sequences
+stop_sequences_humaneval: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
+stop_sequences_mbpp: ["\nclass ", "\nassert", "\n\"\"\"", "\nprint", "\nif "]

@@ -1,0 +1,23 @@
+# Qwen2.5-Coder-1.5B — Qwen/Qwen2.5-Coder-1.5B (1.5B)
+model_id: "Qwen/Qwen2.5-Coder-1.5B"
+short_name: "qwen25"
+params: "1.5B"
+max_context: 32768
+trust_remote_code: false
+
+# transformers version constraint
+transformers_version: ">=4.37"
+
+# FIM tokens
+fim_prefix: "<|fim_prefix|>"
+fim_middle: "<|fim_middle|>"
+fim_suffix: "<|fim_suffix|>"
+fim_pad: "<|fim_pad|>"
+
+# Binary classifier scoring tokens
+binary_good_token: " good"
+binary_bad_token: " bad"
+
+# Evaluation stop sequences
+stop_sequences_humaneval: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
+stop_sequences_mbpp: ["\nclass ", "\nassert", "\n\"\"\"", "\nprint", "\nif "]

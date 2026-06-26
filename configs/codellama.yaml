@@ -1,0 +1,23 @@
+# Code Llama 7B — codellama/CodeLlama-7b-hf (7B)
+model_id: "codellama/CodeLlama-7b-hf"
+short_name: "codellama"
+params: "7B"
+max_context: 16384
+trust_remote_code: false
+
+# transformers version constraint
+transformers_version: ">=4.34"
+
+# FIM tokens (sentencepiece encoding — ▁ prefix is sp space marker)
+fim_prefix: "▁<PRE>"
+fim_middle: "▁<MID>"
+fim_suffix: "▁<SUF>"
+fim_pad: null  # Code Llama has no FIM pad token
+
+# Binary classifier scoring tokens
+binary_good_token: " good"
+binary_bad_token: " bad"
+
+# Evaluation stop sequences
+stop_sequences_humaneval: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
+stop_sequences_mbpp: ["\nclass ", "\nassert", "\n\"\"\"", "\nprint", "\nif "]

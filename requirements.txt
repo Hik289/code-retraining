@@ -1,0 +1,11 @@
+# General environment — StarCoder2-3B, Qwen2.5-Coder-1.5B, CodeLlama-7B
+# (SantaCoder needs a separate, pinned environment: see requirements-santacoder.txt)
+torch>=2.1
+transformers>=4.39,<4.50
+datasets>=2.18
+accelerate>=0.30
+evalplus==0.3.1
+huggingface_hub>=0.23
+numpy<2.0
+pyyaml>=6.0
+tqdm>=4.65
