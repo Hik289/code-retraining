@@ -1,11 +1,46 @@
-# Gated Retraining for Code LLMs: Studying and Mitigating Model Collapse under Self-Training
+<div align="center">
 
-This repository contains the full experimental code for studying **model collapse**
-in code language models trained iteratively on **their own generated data**
-(*self-training* / *self-play*), and for testing whether **gating** the
-self-generated data with quality filters mitigates the collapse.
+# When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs
 
-We run a **4 models × 5 filtering strategies** grid of cumulative self-training
+**Xinyuan Song, Zekun Cai, Liang Zhao**
+
+[![arXiv](https://img.shields.io/badge/arXiv-2606.28438-b31b1b.svg)](https://arxiv.org/abs/2606.28438)
+[![Paper](https://img.shields.io/badge/Paper-PDF-blue.svg)](https://arxiv.org/pdf/2606.28438)
+[![Code](https://img.shields.io/badge/GitHub-Code-black.svg)](https://github.com/Hik289/code-retraining)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+**Official implementation of "When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs."**
+
+</div>
+
+---
+
+## Overview
+
+Recursive self-training can degrade code LLMs when AI-generated code re-enters
+the training corpus without fresh human data or independent quality control. This
+repository studies that loop by repeatedly fine-tuning code models on their own
+generations, then measuring whether code review gates slow or prevent collapse.
+
+We compare three review regimes from the paper:
+
+| Regime | Filters in this repo | Review signal |
+|--------|----------------------|---------------|
+| **No review** | `none` | Generated samples are fed directly back into training. |
+| **Human-gate review** | `compile`, `quality` | Model-independent checks such as compilation and static quality heuristics. |
+| **AI-self-gate review** | `ppl`, `binary` | Model-coupled signals such as perplexity and binary self-scoring. |
+
+The main finding is that no-review self-training collapses fastest, human-gate
+filters slow but do not eliminate collapse, and AI-self-gates can enter a
+"rubber-stamp" regime where acceptance scores rise while benchmark correctness
+falls. Stable recursive code training therefore needs exogenous verification
+rather than review signals coupled to the same model being retrained.
+
+---
+
+## Experimental Setup
+
+We run a **4 models x 5 filtering strategies** grid of cumulative self-training
 experiments and evaluate each round on HumanEval(+), MBPP(+), and LiveCodeBench.
 
 | | |
@@ -13,49 +48,41 @@ experiments and evaluate each round on HumanEval(+), MBPP(+), and LiveCodeBench.
 | **Models** | SantaCoder (1.1B), StarCoder2-3B, Qwen2.5-Coder-1.5B, CodeLlama-7B |
 | **Filters** | `none`, `compile`, `quality`, `ppl`, `binary` |
 | **Data source** | [The Stack (dedup)](https://huggingface.co/datasets/bigcode/the-stack-dedup), Python subset |
-| **Self-play** | take the first 1024 tokens of a file as prompt → generate 1024 tokens → train on it |
-| **Loop** | 5 cumulative rounds × 3000 steps (continue training from the previous round's checkpoint) |
+| **Self-play** | take the first 1024 tokens of a file as prompt -> generate 1024 tokens -> train on it |
+| **Loop** | 5 cumulative rounds x 3000 steps, continuing from the previous round checkpoint |
 | **Evaluation** | [EvalPlus](https://github.com/evalplus/evalplus) (HumanEval+, MBPP+) and [LiveCodeBench](https://github.com/LiveCodeBench/LiveCodeBench), per round |
 
----
+### Recursive self-training loop
 
-## The core question
-
-> If a model is trained over and over on data it generated itself, does its
-> coding ability improve, degrade, or stay flat — and can filtering the
-> self-generated data prevent degradation?
-
-### Ungated self-training loop
-
-Without any filtering, generated data is fed straight back into training. Errors
-and low-diversity samples accumulate across rounds, driving **model collapse**.
+Without review, generated data is fed straight back into training. Errors and
+low-diversity samples accumulate across rounds, driving model collapse.
 
 ![Ungated self-training loop](assets/ungated_self_training_loop.jpg)
 
-### Gated retraining pipeline
+### Gated review pipeline
 
-The gated variants insert a **filter** between generation and training. Only
-samples that pass the gate are used to retrain the model, which is the proposed
-mitigation we ablate across four filter designs.
+The gated variants insert a review filter between generation and training. Only
+samples that pass the gate are used to retrain the model, letting us ablate
+human-gate and AI-self-gate review strategies.
 
 ![Gated retraining pipeline](assets/gated_retraining_pipeline.jpg)
 
-### The five gates
+### Filters
 
 | Filter | What it keeps |
 |--------|---------------|
-| `none` | Everything — the ungated baseline (expected to collapse). |
+| `none` | Everything; the no-review baseline. |
 | `compile` | Only samples whose code parses/compiles. |
-| `quality` | Compiles **and** passes lightweight quality heuristics (length, non-repetition). |
-| `ppl` | Generate 4× the samples, score by the model's own perplexity, keep the lowest-perplexity top 25%. |
-| `binary` | Generate 4× the samples, score with a "good vs. bad" binary classifier prompt, keep the top 25%. |
+| `quality` | Compiles and passes lightweight quality heuristics such as length and non-repetition checks. |
+| `ppl` | Generate 4x the samples, score by the model's own perplexity, keep the lowest-perplexity top 25%. |
+| `binary` | Generate 4x the samples, score with a "good vs. bad" binary classifier prompt, keep the top 25%. |
 
 ---
 
 ## Repository structure
 
 ```
-gated-code-retraining/
+code-retraining/
 ├── README.md
 ├── LICENSE
 ├── requirements.txt              # general env (StarCoder2 / Qwen2.5 / CodeLlama)
@@ -99,8 +126,8 @@ breaks on `transformers >= 4.36`), so it gets its own environment. The other thr
 models share a general environment.
 
 ```bash
-git clone <your-fork-url> gated-code-retraining
-cd gated-code-retraining
+git clone git@github.com:Hik289/code-retraining.git
+cd code-retraining
 
 # General environment — StarCoder2 / Qwen2.5 / CodeLlama
 python3 -m venv venvs/general
@@ -238,14 +265,17 @@ a "collapse speed" table, and per-metric trend figures under `results/summary/`.
 
 ## Citation
 
-If you use this code, please cite this repository:
+If you use this code, please cite the paper:
 
 ```bibtex
-@misc{gated-code-retraining,
-  title  = {Gated Retraining for Code LLMs: Studying and Mitigating Model Collapse under Self-Training},
-  author = {The Authors},
-  year   = {2026},
-  howpublished = {\url{https://github.com/<your-org>/gated-code-retraining}}
+@misc{song2026aireviewsowncode,
+  title         = {When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs},
+  author        = {Xinyuan Song and Zekun Cai and Liang Zhao},
+  year          = {2026},
+  eprint        = {2606.28438},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SE},
+  url           = {https://arxiv.org/abs/2606.28438}
 }
 ```
 
