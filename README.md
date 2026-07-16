@@ -14,6 +14,12 @@
 
 ---
 
+## At a Glance
+
+- **Research question.** What happens when code LLMs recursively train on code filtered or reviewed by AI systems?
+- **Core idea.** The repository compares self-training regimes with gated review pipelines and analyzes collapse under different filters.
+- **What is included.** Training loops, review filters, LiveCodeBench setup, grid reproduction, result schemas, and known-pitfall notes.
+
 ## Overview
 
 Recursive self-training can degrade code LLMs when AI-generated code re-enters
@@ -173,7 +179,7 @@ The Stack from the Hub (or pass `--local_dataset_path`).
 
 ---
 
-## Quickstart
+## Quick Start
 
 Run a single (model, filter) experiment for 5 cumulative rounds:
 
