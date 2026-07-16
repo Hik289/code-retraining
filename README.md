@@ -1,16 +1,18 @@
-<div align="center">
+<h1 align="center">When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs</h1>
 
-# When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs
+<p align="center">
+  <strong>Xinyuan Song, Zekun Cai, Liang Zhao</strong>
+</p>
 
-**Xinyuan Song, Zekun Cai, Liang Zhao**
+<p align="center">
+  <a href="https://arxiv.org/abs/2606.28438"><img src="https://img.shields.io/badge/arXiv-2606.28438-b31b1b.svg" alt="arXiv"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT license"></a>
+  <a href="requirements.txt"><img src="https://img.shields.io/badge/Python-3.8%2B-3776AB.svg" alt="Python 3.8+"></a>
+</p>
 
-[![arXiv](https://img.shields.io/badge/arXiv-2606.28438-b31b1b.svg)](https://arxiv.org/abs/2606.28438)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg)](requirements.txt)
-
-**Official implementation of "When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs."**
-
-</div>
+<p align="center">
+  <strong>Official implementation of "When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs."</strong>
+</p>
 
 ---
 
