@@ -34,3 +34,24 @@ hf_cache/
 # OS / editor
 .DS_Store
 *.swp
+
+# Shared research-artifact hygiene
+.AppleDouble
+._*
+.vscode/
+.idea/
+*~
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+env/
+.env
+.env.*
+!.env.example
+outputs/
+runs/
+logs/
+checkpoints/
+*.tmp
