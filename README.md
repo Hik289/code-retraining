@@ -270,6 +270,10 @@ a "collapse speed" table, and per-metric trend figures under `results/summary/`.
 
 ---
 
+## Reviewer Guide
+
+For a reviewer-oriented map of smoke checks, paper-scale entry points, data boundaries, and reporting metadata, see [Artifact Guide](docs/ARTIFACT.md).
+
 ## Artifact Checklist
 
 - **Code release.** Core implementations, configuration files, and reproduction entry points are versioned in this repository.
