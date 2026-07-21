@@ -1,7 +1,7 @@
 <h1 align="center">When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs</h1>
 
 <p align="center">
-  <strong>Xinyuan Song, Zekun Cai, Liang Zhao</strong>
+  <strong>Anonymous Authors</strong>
 </p>
 
 <p align="center">
@@ -288,7 +288,7 @@ If you use this code, please cite the paper:
 ```bibtex
 @misc{song2026aireviewsowncode,
   title         = {When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs},
-  author        = {Xinyuan Song and Zekun Cai and Liang Zhao},
+  author        = {Anonymous Authors},
   year          = {2026},
   eprint        = {2606.28438},
   archivePrefix = {arXiv},
