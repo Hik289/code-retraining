@@ -1,8 +1,8 @@
 # Artifact Guide
 
-This guide maps the public `code-retraining` repository to a reviewer-friendly artifact workflow for `When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs`. It is meant to make the release easier to inspect in the style of ICML, ICLR, NeurIPS, and similar artifact-review processes.
+Operational notes for reproducing `When AI Reviews Its Own Code: Recursive Self-Training Collapse in Code LLMs` from the public `code-retraining` repository.
 
-## What To Inspect First
+## Review Path
 
 - `src/`: Core source code and reusable implementations.
 - `scripts/`: Command-line entry points for experiments, analysis, or reproduction.
@@ -14,9 +14,9 @@ This guide maps the public `code-retraining` repository to a reviewer-friendly a
 
 - `requirements.txt`: Primary Python dependency list.
 
-## Minimal Verification
+## Smoke Checks
 
-Run these checks in a fresh environment before launching expensive jobs:
+Run these checks before long jobs:
 
 ```bash
 python -m compileall -q .
@@ -26,9 +26,9 @@ bash scripts/smoke_test_binary_filter.sh
 bash scripts/smoke_test_filters.sh
 ```
 
-## Reproduction And Analysis Entry Points
+## Reproduction Entry Points
 
-These are the main tracked files to inspect for paper-scale or benchmark-scale reproduction. Some require arguments, credentials, downloaded benchmarks, or local data paths described in the README.
+Main tracked entry points for paper-scale or benchmark-scale runs:
 
 - `python fim.py`
 - `bash scripts/debug_completion.sh`
@@ -50,14 +50,14 @@ These are the main tracked files to inspect for paper-scale or benchmark-scale r
 - `assets/gated_retraining_pipeline.jpg`
 - `assets/ungated_self_training_loop.jpg`
 
-## Data, Credentials, And Generated Outputs
+## Data And Outputs
 
 - Keep local dataset paths, downloaded corpora, checkpoints, and generated run artifacts outside git unless the README identifies them as small checked-in fixtures.
 - Record dataset version, preprocessing command, seed, and hardware/runtime notes for every reproduced table or figure.
 - Treat generated JSONL files, logs, caches, model checkpoints, and benchmark downloads as local artifacts unless explicitly tracked as fixtures.
 - For stochastic experiments, record seeds, task counts, dataset splits, and the exact git commit used for the run.
 
-## Reviewer Reporting Checklist
+## Reporting Checklist
 
 - `git rev-parse HEAD`
 - Python version and dependency-install command

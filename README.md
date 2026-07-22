@@ -16,11 +16,11 @@
 
 ---
 
-## At a Glance
+## Repository Summary
 
-- **Research question.** What happens when code LLMs recursively train on code filtered or reviewed by AI systems?
-- **Core idea.** The repository compares self-training regimes with gated review pipelines and analyzes collapse under different filters.
-- **What is included.** Training loops, review filters, LiveCodeBench setup, grid reproduction, result schemas, and known-pitfall notes.
+- **Scope.** What happens when code LLMs recursively train on code filtered or reviewed by AI systems?
+- **Method.** The repository compares self-training regimes with gated review pipelines and analyzes collapse under different filters.
+- **Contents.** Training loops, review filters, LiveCodeBench setup, grid reproduction, result schemas, and known-pitfall notes.
 
 ## Overview
 
@@ -270,16 +270,16 @@ a "collapse speed" table, and per-metric trend figures under `results/summary/`.
 
 ---
 
-## Reviewer Guide
+## Artifact Notes
 
-For a reviewer-oriented map of smoke checks, paper-scale entry points, data boundaries, and reporting metadata, see [Artifact Guide](docs/ARTIFACT.md).
+Reproduction notes are in [docs/ARTIFACT.md](docs/ARTIFACT.md): environment files, smoke checks, data boundaries, and paper-scale entry points.
 
-## Artifact Checklist
+## Reproducibility Notes
 
-- **Code release.** Core implementations, configuration files, and reproduction entry points are versioned in this repository.
-- **Reproducibility.** Start with the smoke or quick-start path before paper-scale runs; record the commit hash, Python version, backend/model identifiers, seeds, and command-line arguments.
-- **Data and credentials.** Large datasets, benchmark downloads, generated outputs, and API keys are intentionally excluded. Use the data and configuration notes above to recreate them or point to local copies.
-- **Reporting.** For paper-scale runs, keep raw run folders immutable and regenerate tables or figures from the logged artifacts with the listed analysis scripts.
+- **Release.** Source code, configuration files, and runnable entry points are tracked here.
+- **Runs.** Start with the smoke or quick-start commands before full grids; record commit hash, Python version, model/backend identifiers, seeds, and command-line arguments.
+- **Data.** Large datasets, benchmark downloads, generated outputs, and API keys are not tracked. Use the data/configuration notes above to recreate or point to local copies.
+- **Reporting.** Keep raw run folders fixed for paper-scale runs and regenerate tables or figures from logged artifacts with the listed scripts.
 
 ## Citation
 
