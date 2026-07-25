@@ -52,7 +52,7 @@ def main():
     kept_scores = np.array([s["score"] for _, s in kept]) if kept else np.array([])
     pass_rate = len(kept) / len(valid) * 100 if valid else 0.0
 
-    print(f"\n===== Binary Classifier Filter =====")
+    print("\n===== Binary Classifier Filter =====")
     print(f"Input:     {len(samples)} (finite: {len(valid)}, nan/inf: {invalid_count})")
     print(f"Threshold: score > {args.threshold}")
     print(f"Kept:      {len(kept)} ({pass_rate:.1f}% pass rate)")

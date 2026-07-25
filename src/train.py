@@ -252,13 +252,17 @@ def run_training(args):
     train_dataset, valid_dataset = create_datasets(tokenizer, cfg, args)
 
     # ---- TrainingArguments ----
-    # transformers<4.36 uses evaluation_strategy, >=4.36 uses eval_strategy
-    import transformers
-    tf_version = tuple(int(x) for x in transformers.__version__.split(".")[:2])
+    # The keyword changed across Transformers releases; inspect the installed API.
+    import inspect
 
     eval_kwargs = {}
     if valid_dataset is not None:
-        eval_key = "eval_strategy" if tf_version >= (4, 36) else "evaluation_strategy"
+        parameters = inspect.signature(TrainingArguments.__init__).parameters
+        eval_key = (
+            "eval_strategy"
+            if "eval_strategy" in parameters
+            else "evaluation_strategy"
+        )
         eval_kwargs[eval_key] = "steps"
         eval_kwargs["eval_steps"] = args.eval_freq
 
@@ -325,7 +329,7 @@ def run_training(args):
     log_history = trainer.state.log_history
     train_losses = [e["loss"] for e in log_history if "loss" in e]
     final_loss = train_losses[-1] if train_losses else None
-    print(f"\nTraining complete.")
+    print("\nTraining complete.")
     print(f"Final loss: {final_loss}")
     if not args.skip_final_save:
         print(f"Checkpoint: {final_ckpt}")

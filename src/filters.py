@@ -1,26 +1,26 @@
-"""filters.py — 离线过滤：compile / quality / PPL 打分 / Binary 打分 / top-K 过滤
+"""Offline compile, quality, perplexity, and binary-score filters.
 
-所有过滤功能通过子命令调用：
+Each filter is exposed as a subcommand:
 
-    # compile 检查（纯 CPU）
+    # Compile check (CPU only)
     python src/filters.py compile \
         --input_file round1_raw.jsonl --output_file round1.jsonl
 
-    # compile + quality（纯 CPU）
+    # Compile and static quality checks (CPU only)
     python src/filters.py quality \
         --input_file round1_raw.jsonl --output_file round1.jsonl
 
-    # PPL 打分（需 GPU）
+    # Perplexity scoring (GPU)
     python src/filters.py score-ppl \
         --input_file round1_raw.jsonl --output_file round1_scored.jsonl \
         --model_path bigcode/santacoder --config configs/santacoder.yaml
 
-    # Binary 打分（需 GPU）
+    # Binary self-scoring (GPU)
     python src/filters.py score-binary \
         --input_file round1_raw.jsonl --output_file round1_scored.jsonl \
         --model_path bigcode/santacoder --config configs/santacoder.yaml
 
-    # top-K 过滤（纯 CPU）
+    # Top-K selection (CPU only)
     python src/filters.py filter-topk \
         --input_file round1_scored.jsonl --output_file round1.jsonl \
         --score_field ppl --top_percent 25 --ascending
@@ -88,7 +88,7 @@ def cmd_compile(args):
     write_jsonl(kept, args.output_file)
 
     rate = len(kept) / len(samples) * 100 if samples else 0
-    print(f"\n===== Compile Filter =====")
+    print("\n===== Compile Filter =====")
     print(f"Input:  {len(samples)}")
     print(f"Passed: {len(kept)} ({rate:.1f}%)")
     print(f"Output: {args.output_file}")
@@ -127,7 +127,7 @@ def cmd_quality(args):
     write_jsonl(kept, args.output_file)
 
     rate = len(kept) / len(samples) * 100 if samples else 0
-    print(f"\n===== Quality Filter (compile + repetition + length) =====")
+    print("\n===== Quality Filter (compile + repetition + length) =====")
     print(f"Input:  {len(samples)}")
     print(f"Passed: {len(kept)} ({rate:.1f}%)")
     for reason, cnt in sorted(reject_counts.items()):
@@ -224,7 +224,7 @@ def cmd_score_ppl(args):
     finite_ppls = [p for p in all_ppls if math.isfinite(p)]
     if finite_ppls:
         arr = np.array(finite_ppls)
-        print(f"\n===== PPL Stats =====")
+        print("\n===== PPL Stats =====")
         print(f"Samples: {len(all_ppls)} (finite: {len(finite_ppls)}, "
               f"inf: {len(all_ppls) - len(finite_ppls)})")
         print(f"min={arr.min():.2f}  p25={np.percentile(arr, 25):.2f}  "
@@ -328,7 +328,7 @@ def cmd_score_binary(args):
     finite_scores = [s for s in all_scores if math.isfinite(s)]
     if finite_scores:
         arr = np.array(finite_scores)
-        print(f"\n===== Binary Score Stats =====")
+        print("\n===== Binary Score Stats =====")
         print(f"Samples: {len(all_scores)} (finite: {len(finite_scores)}, "
               f"nan/inf: {len(all_scores) - len(finite_scores)})")
         print(f"min={arr.min():.4f}  median={np.median(arr):.4f}  "
@@ -340,6 +340,9 @@ def cmd_score_binary(args):
 # ===================== Subcommand: filter-topk =====================
 
 def cmd_filter_topk(args):
+    if not 0 < args.top_percent <= 100:
+        raise ValueError("--top_percent must be in (0, 100]")
+
     samples = load_jsonl(args.input_file)
     field = args.score_field
 

@@ -10,7 +10,8 @@
 #SBATCH --output=selfplay_results/logs/debug2_%j.out
 
 set -euo pipefail
-PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 source venv/bin/activate
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"

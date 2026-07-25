@@ -1,13 +1,13 @@
-"""fim.py — Fill-In-The-Middle 数据增强（多模型版）
+"""Fill-in-the-middle augmentation for all supported model families.
 
-实现 FIM 论文 (Bavarian et al., 2022) 中的 PSM 和 SPM 两种变体。
-通过 config dict 获取 FIM token，支持所有 4 个模型。
+Implements the PSM and SPM variants from Bavarian et al. (2022). FIM tokens
+are supplied by the model configuration.
 """
 import numpy as np
 
 
 def get_fim_token_ids(tokenizer, config):
-    """根据 config 获取 FIM token IDs。
+    """Resolve FIM token IDs from a model configuration.
 
     Args:
         tokenizer: HuggingFace tokenizer
@@ -27,7 +27,7 @@ def get_fim_token_ids(tokenizer, config):
     else:
         pad_id = None
 
-    # 校验：token ID 不应是 unk_token_id（说明 token 不在 vocab 里）
+    # An unknown-token result means the configured FIM token is not in the vocabulary.
     unk_id = getattr(tokenizer, "unk_token_id", None)
     for name, tid in [("prefix", prefix_id), ("middle", middle_id), ("suffix", suffix_id)]:
         if tid == unk_id:
@@ -41,9 +41,10 @@ def get_fim_token_ids(tokenizer, config):
 
 def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
             pad_tok_id, fim_rate=0.5, fim_spm_rate=0.5):
-    """对 token 序列做 FIM 变换。
+    """Apply an optional FIM permutation to a token sequence.
 
-    以 fim_rate 概率触发变换；触发后以 fim_spm_rate 概率选择 SPM 或 PSM 格式。
+    The transform is applied with probability ``fim_rate``. Conditional on a
+    transform, ``fim_spm_rate`` selects SPM instead of PSM.
 
     PSM (Prefix-Suffix-Middle): <PRE> prefix <SUF> suffix <MID> middle
     SPM (Suffix-Prefix-Middle): <PRE> <SUF> suffix <MID> prefix middle
@@ -53,8 +54,8 @@ def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
         np_rng: numpy RandomState
         suffix_tok_id, prefix_tok_id, middle_tok_id: FIM token IDs
         pad_tok_id: FIM pad token ID (unused in current impl, reserved)
-        fim_rate: 触发 FIM 变换的概率
-        fim_spm_rate: FIM 变换中选择 SPM 格式的概率
+        fim_rate: Probability of applying a FIM transform.
+        fim_spm_rate: Conditional probability of selecting SPM.
 
     Returns:
         (new_sample, np_rng)

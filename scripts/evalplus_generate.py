@@ -34,7 +34,7 @@ def parse_args():
 
 # 官方 bigcode-evaluation-harness 的 stop words
 # HumanEval: 模型在函数体内补全，\ndef 表示函数结束
-# MBPP: 模型需要生成整个函数定义，不能用 \ndef 作为 stop word
+# MBPP requires a complete function definition, so ``\ndef`` cannot be a stop sequence.
 STOP_SEQUENCES_HUMANEVAL = [
     "\nclass", "\ndef", "\n#", "\n@", "\nprint", "\nif", "\n```",
     "<file_sep>", "<|endoftext|>",

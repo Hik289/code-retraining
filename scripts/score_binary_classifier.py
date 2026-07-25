@@ -136,7 +136,7 @@ def main():
     finite_scores = [s for s in all_scores if math.isfinite(s)]
     if finite_scores:
         arr = np.array(finite_scores)
-        print(f"\n===== Score Statistics =====")
+        print("\n===== Score Statistics =====")
         print(f"Total: {len(all_scores)} (finite: {len(finite_scores)}, nan/inf: {len(all_scores) - len(finite_scores)})")
         print(f"min:    {arr.min():.4f}")
         print(f"p25:    {np.percentile(arr, 25):.4f}")

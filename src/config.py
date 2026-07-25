@@ -1,20 +1,20 @@
-"""config.py — 模型配置加载
+"""Load model settings shared by the experiment scripts.
 
-从 configs/*.yaml 读取模型配置，提供统一接口供所有 src/ 脚本使用。
+Configurations are read from ``configs/*.yaml`` or an explicit YAML path.
 """
 import os
 import yaml
 
-# configs/ 目录相对于本文件的位置
+# Resolve the bundled configuration directory relative to this file.
 _CONFIGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
 
 
 def load_model_config(model_name_or_path: str) -> dict:
-    """加载模型配置。
+    """Load and validate a model configuration.
 
     Args:
-        model_name_or_path: 模型短名 (e.g. "santacoder") 或 YAML 文件路径。
-            短名会自动映射到 configs/{name}.yaml。
+        model_name_or_path: A short name such as ``santacoder`` or a YAML path.
+            Short names resolve to ``configs/{name}.yaml``.
 
     Returns:
         dict with all config fields from the YAML file.
@@ -30,13 +30,13 @@ def load_model_config(model_name_or_path: str) -> dict:
     with open(yaml_path) as f:
         cfg = yaml.safe_load(f)
 
-    # 基本校验
+    # Validate fields required by tokenization and FIM augmentation.
     required = ["model_id", "short_name", "fim_prefix", "fim_middle", "fim_suffix"]
     missing = [k for k in required if k not in cfg]
     if missing:
         raise ValueError(f"Config {yaml_path} missing required fields: {missing}")
 
-    # 默认值
+    # Defaults shared across model families.
     cfg.setdefault("trust_remote_code", False)
     cfg.setdefault("fim_pad", None)
     cfg.setdefault("binary_good_token", " good")
@@ -48,7 +48,7 @@ def load_model_config(model_name_or_path: str) -> dict:
 
 
 if __name__ == "__main__":
-    # 快速验证：加载所有 4 个配置
+    # Quick validation of all bundled configurations.
     for name in ["santacoder", "starcoder2", "qwen25", "codellama"]:
         try:
             cfg = load_model_config(name)

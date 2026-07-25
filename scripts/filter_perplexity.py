@@ -49,7 +49,7 @@ def main():
     # Statistics
     ppls = np.array([s["ppl"] for _, s in valid])
     kept_ppls = np.array([s["ppl"] for _, s in kept])
-    print(f"\n===== PPL 过滤统计 =====")
+    print("\n===== PPL 过滤统计 =====")
     print(f"输入: {len(samples)} (有效: {len(valid)}, inf: {invalid_count})")
     print(f"保留: {keep_count} (top {args.top_percent}%)")
     if len(ppls) > 0:

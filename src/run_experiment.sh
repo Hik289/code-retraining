@@ -102,7 +102,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
 case "$MODEL" in
@@ -230,7 +231,7 @@ generation_complete() {
     if [ "$filter" = "ppl" ] || [ "$filter" = "binary" ]; then
         [ "$(json_lines "$raw_file")" -ge "$RAW_NUM_SAMPLES" ] \
             && [ "$(json_lines "$scored_file")" -ge "$RAW_NUM_SAMPLES" ] \
-            && [ "$(json_lines "$data_file")" -gt 0 ]
+            && [ "$(json_lines "$data_file")" -ge "$NUM_SAMPLES" ]
     else
         [ "$(json_lines "$data_file")" -ge "$NUM_SAMPLES" ]
     fi
@@ -386,6 +387,10 @@ for ROUND in $(seq 1 "$ROUNDS"); do
     fi
     FILTER_PASS_RATE=$(python -c "n=float('$NUM_GENERATED'); k=float('$NUM_AFTER_FILTER'); print(round(k/n, 4) if n else 0.0)")
     echo "data=$DATA_FILE generated=$NUM_GENERATED after_filter=$NUM_AFTER_FILTER pass_rate=$FILTER_PASS_RATE"
+    if [ "$NUM_AFTER_FILTER" -lt "$NUM_SAMPLES" ]; then
+        echo "ERROR: expected at least $NUM_SAMPLES training samples, found $NUM_AFTER_FILTER"
+        exit 1
+    fi
 
     TRAIN_START=$(date +%s)
     if [ -d "$CKPT" ] && { [ -f "$CKPT/model.safetensors" ] || ls "$CKPT"/model-*.safetensors >/dev/null 2>&1; }; then

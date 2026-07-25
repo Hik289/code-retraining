@@ -282,7 +282,7 @@ def run_training(args):
     final_ckpt = os.path.join(args.output_dir, "final_checkpoint")
     trainer.save_model(final_ckpt)
     tokenizer.save_pretrained(final_ckpt)
-    # 训练时 use_cache=False，但推理需要 KV cache，修正 generation_config
+    # Training disables the KV cache; restore it for inference.
     from transformers import GenerationConfig
     gen_config = GenerationConfig.from_pretrained(final_ckpt)
     gen_config.use_cache = True

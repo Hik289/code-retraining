@@ -157,23 +157,19 @@ def run_evaluate(samples_file, dataset):
     if not eval_data:
         return scores
 
-    n_tasks = len(eval_data)
+    n_samples = 0
     base_pass = 0
     plus_pass = 0
 
-    for task_id, task_results in eval_data.items():
+    for task_results in eval_data.values():
         if not task_results:
             continue
-        # For n_samples=1, task_results has 1 entry per sample
-        # Count task as passing if first sample passes (greedy)
-        sample = task_results[0]
-        if sample.get("base_status") == "pass":
-            base_pass += 1
-        if sample.get("plus_status") == "pass":
-            plus_pass += 1
+        n_samples += len(task_results)
+        base_pass += sum(r.get("base_status") == "pass" for r in task_results)
+        plus_pass += sum(r.get("plus_status") == "pass" for r in task_results)
 
-    scores[f"{dataset}_pass1"] = round(base_pass / n_tasks, 4) if n_tasks > 0 else 0.0
-    scores[f"{dataset}_plus_pass1"] = round(plus_pass / n_tasks, 4) if n_tasks > 0 else 0.0
+    scores[f"{dataset}_pass1"] = round(base_pass / n_samples, 4) if n_samples else 0.0
+    scores[f"{dataset}_plus_pass1"] = round(plus_pass / n_samples, 4) if n_samples else 0.0
 
     return scores
 
@@ -188,7 +184,7 @@ def main():
     print(f"Temperature: {args.temperature}, n_samples: {args.n_samples}")
 
     # Generate completions
-    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
+    os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
     results = generate_samples(args, cfg)
 
     with open(args.output_file, "w") as f:
@@ -206,7 +202,7 @@ def main():
             "evaluation_skipped": True,
         }
     else:
-        print(f"\nRunning EvalPlus evaluation...")
+        print("\nRunning EvalPlus evaluation...")
         scores = run_evaluate(args.output_file, args.dataset)
     for k, v in scores.items():
         if isinstance(v, (float, int)):

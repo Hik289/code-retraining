@@ -1,7 +1,7 @@
 #!/bin/bash
 # Smoke test: 验证三个过滤实验的脚本能跑通
 # 用法：sbatch scripts/smoke_test_filters.sh
-# 需要 GPU，生成极少量样本快速验证
+# GPU smoke test with a deliberately small sample count.
 
 #SBATCH --job-name=smoke_filter
 #SBATCH --gres=gpu:1
@@ -14,7 +14,8 @@
 
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
 source "$PROJECT_DIR/venv/bin/activate"

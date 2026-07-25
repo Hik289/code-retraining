@@ -1,22 +1,23 @@
-"""generate.py — Self-play 数据生成（多模型版）
+"""Multi-model self-play data generation.
 
-从 The Stack Python 流式加载，取每个文件前 prompt_tokens 个 token 作 prompt，
-用模型生成后续 max_new_tokens 个 token，保存为 JSONL。
+Streams Python files from The Stack, uses the first ``prompt_tokens`` tokens
+as context, generates ``max_new_tokens`` continuation tokens, and writes JSONL.
 
-支持两种模式：
-  1. 无过滤 / 不带 --filter_mode：一次生成 num_samples 条
-  2. 带过滤 --filter_mode compile|compile+quality：循环生成直到过滤后满 num_samples 条
+Two modes are supported:
+  1. Without ``--filter_mode``, generate ``num_samples`` records once.
+  2. With ``compile`` or ``compile+quality``, continue until ``num_samples``
+     records pass the selected filter.
 
-PPL/Binary 过滤走独立的 src/filters.py，不在此脚本中处理。
+Perplexity and binary filtering are handled separately by ``src/filters.py``.
 
-用法：
-    # 无过滤
+Usage:
+    # No inline filter
     python src/generate.py --config configs/santacoder.yaml \
         --model_path bigcode/santacoder \
         --output_file results/santacoder/no_filter/generated_data/round1.jsonl \
         --num_samples 5000 --seed 1
 
-    # compile 过滤
+    # Compile filter
     python src/generate.py --config configs/santacoder.yaml \
         --model_path bigcode/santacoder \
         --output_file results/santacoder/compile_filter/generated_data/round1.jsonl \
@@ -99,7 +100,7 @@ DEFAULT_ARROW_CACHE = os.environ.get("THE_STACK_ARROW_CACHE", "")
 
 
 def load_dataset_iter(args):
-    """加载 The Stack 数据集，返回流式迭代器。"""
+    """Load The Stack and return a shuffled streaming iterator."""
     if args.local_dataset_path:
         arrow_dir = args.local_dataset_path
     elif os.path.isdir(DEFAULT_ARROW_CACHE):
@@ -167,7 +168,7 @@ def parse_args():
 def main():
     args = parse_args()
     cfg = load_model_config(args.config)
-    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
+    os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
 
     # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(

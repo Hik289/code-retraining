@@ -135,7 +135,7 @@ def main():
     finite_ppls = [p for p in all_ppls if math.isfinite(p)]
     if finite_ppls:
         arr = np.array(finite_ppls)
-        print(f"\n===== PPL 统计 =====")
+        print("\n===== PPL 统计 =====")
         print(f"样本数: {len(all_ppls)} (有效: {len(finite_ppls)}, inf: {len(all_ppls) - len(finite_ppls)})")
         print(f"min:    {arr.min():.2f}")
         print(f"p25:    {np.percentile(arr, 25):.2f}")

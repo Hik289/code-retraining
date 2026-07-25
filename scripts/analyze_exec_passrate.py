@@ -12,7 +12,6 @@ Usage:
 import argparse
 import json
 import multiprocessing
-import signal
 import sys
 from collections import Counter
 
