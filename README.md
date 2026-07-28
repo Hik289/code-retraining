@@ -16,11 +16,15 @@
 
 ---
 
-## Repository Summary
+## At A Glance
 
-- **Scope.** What happens when code LLMs recursively train on code filtered or reviewed by AI systems?
-- **Method.** The repository compares self-training regimes with gated review pipelines and analyzes collapse under different filters.
-- **Contents.** Training loops, review filters, LiveCodeBench setup, grid reproduction, result schemas, and known-pitfall notes.
+| Artifact review question | Entry point |
+| --- | --- |
+| Research question | What happens when code LLMs recursively train on code filtered or reviewed by AI systems? |
+| Core method | The repository compares self-training regimes with gated review pipelines and analyzes collapse under different filters. |
+| Included artifacts | Training loops, review filters, LiveCodeBench setup, grid reproduction, result schemas, and known-pitfall notes. |
+| Fast validation | `bash src/run_experiment.sh santacoder none` for a single local run. |
+| Paper-scale reproduction | The 4 model x 5 filter grid via `src/run_experiment.sh` and aggregation scripts. |
 
 ## Overview
 
