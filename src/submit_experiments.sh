@@ -1,13 +1,4 @@
 #!/bin/bash
-# Submit V2 experiments in controlled batches.
-#
-# Usage:
-#   bash src/submit_experiments.sh none
-#   bash src/submit_experiments.sh compile
-#   bash src/submit_experiments.sh quality
-#   bash src/submit_experiments.sh ppl
-#   bash src/submit_experiments.sh binary
-#   bash src/submit_experiments.sh all
 
 set -euo pipefail
 
