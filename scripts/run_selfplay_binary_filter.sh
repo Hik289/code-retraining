@@ -1,10 +1,4 @@
 #!/bin/bash
-# Exp D: Self-Play + Binary Classifier Filter
-#
-# Each round: generate batches of 2000 -> score -> keep score>0 -> accumulate
-# until TARGET_SAMPLES reached -> train -> evaluate.
-#
-# Usage: sbatch scripts/run_selfplay_binary_filter.sh
 
 #SBATCH --job-name=sp_binary
 #SBATCH --gres=gpu:1
