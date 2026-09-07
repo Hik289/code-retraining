@@ -1,8 +1,4 @@
 #!/bin/bash
-# Self-Play 循环：5 轮（生成→训练→评估）
-# 用法：sbatch scripts/run_selfplay_loop.sh
-# 每轮：(1) 用当前模型生成 5000 条数据 (2) 2卡数据并行训练 6000 步 (3) EvalPlus + LiveCodeBench 评估
-# 总计 30K 步，与 The Stack baseline 一致
 
 #SBATCH --job-name=selfplay_loop
 #SBATCH --gres=gpu:2

@@ -92,10 +92,6 @@ def apply_filter(text, filter_mode, prompt_tokens, tokenizer,
 
 # ===================== Data Loading =====================
 
-# Default Arrow cache path for The Stack
-# Path to a locally cached The Stack (dedup, Python) Arrow dataset directory.
-# Set the THE_STACK_ARROW_CACHE environment variable to point at it, or pass
-# --local_dataset_path on the command line. Falls back to streaming from the Hub.
 DEFAULT_ARROW_CACHE = os.environ.get("THE_STACK_ARROW_CACHE", "")
 
 

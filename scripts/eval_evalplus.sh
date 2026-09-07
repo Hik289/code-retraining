@@ -1,8 +1,4 @@
 #!/bin/bash
-# EvalPlus 评估（HumanEval+ 和 MBPP+）
-# 流程：自定义 codegen 生成代码 → evalplus.evaluate 评估
-# 用法：sbatch scripts/eval_evalplus.sh <model_path> [humaneval|mbpp]
-# 默认同时评估 humaneval 和 mbpp
 
 #SBATCH --job-name=eval_evalplus
 #SBATCH --gres=gpu:1
