@@ -1,24 +1,10 @@
-"""Load model settings shared by the experiment scripts.
-
-Configurations are read from ``configs/*.yaml`` or an explicit YAML path.
-"""
 import os
 import yaml
 
-# Resolve the bundled configuration directory relative to this file.
 _CONFIGS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
 
 
 def load_model_config(model_name_or_path: str) -> dict:
-    """Load and validate a model configuration.
-
-    Args:
-        model_name_or_path: A short name such as ``santacoder`` or a YAML path.
-            Short names resolve to ``configs/{name}.yaml``.
-
-    Returns:
-        dict with all config fields from the YAML file.
-    """
     if os.path.isfile(model_name_or_path):
         yaml_path = model_name_or_path
     else:
@@ -30,13 +16,11 @@ def load_model_config(model_name_or_path: str) -> dict:
     with open(yaml_path) as f:
         cfg = yaml.safe_load(f)
 
-    # Validate fields required by tokenization and FIM augmentation.
     required = ["model_id", "short_name", "fim_prefix", "fim_middle", "fim_suffix"]
     missing = [k for k in required if k not in cfg]
     if missing:
         raise ValueError(f"Config {yaml_path} missing required fields: {missing}")
 
-    # Defaults shared across model families.
     cfg.setdefault("trust_remote_code", False)
     cfg.setdefault("fim_pad", None)
     cfg.setdefault("binary_good_token", " good")
@@ -48,7 +32,6 @@ def load_model_config(model_name_or_path: str) -> dict:
 
 
 if __name__ == "__main__":
-    # Quick validation of all bundled configurations.
     for name in ["santacoder", "starcoder2", "qwen25", "codellama"]:
         try:
             cfg = load_model_config(name)

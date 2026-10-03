@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# ---- 环境 ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
@@ -27,7 +26,6 @@ echo "=== GPU info ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo ""
 
-# ---- Test 1: no filter, 10 samples ----
 echo "=== Test 1: generate 10 samples, no filter ==="
 python src/generate.py \
     --config configs/santacoder.yaml \
@@ -43,7 +41,6 @@ echo "Lines: $(wc -l < /tmp/test_gen_nofilter.jsonl)"
 echo "First record:"
 head -1 /tmp/test_gen_nofilter.jsonl | python -c "import sys,json; d=json.load(sys.stdin); print(f'  content length: {len(d[\"content\"])} chars'); print(f'  first 100 chars: {d[\"content\"][:100]}')"
 
-# ---- Test 2: compile filter, 10 samples ----
 echo ""
 echo "=== Test 2: generate 10 samples, compile filter ==="
 python src/generate.py \

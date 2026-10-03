@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# ---- Environment ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
@@ -27,7 +26,6 @@ echo "=== GPU info ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo ""
 
-# ---- Step 0: Generate small test data (10 samples, no filter) ----
 echo "=== Step 0: Generate 10 test samples ==="
 python src/generate.py \
     --config configs/santacoder.yaml \
@@ -40,14 +38,12 @@ python src/generate.py \
 echo "Generated: $(wc -l < /tmp/test_filter_raw.jsonl) lines"
 echo ""
 
-# ---- Step 1: compile filter (CPU) ----
 echo "=== Step 1: compile filter ==="
 python src/filters.py compile \
     --input_file /tmp/test_filter_raw.jsonl \
     --output_file /tmp/test_filter_compile.jsonl
 echo ""
 
-# ---- Step 2: quality filter (CPU, needs tokenizer) ----
 echo "=== Step 2: quality filter ==="
 python src/filters.py quality \
     --input_file /tmp/test_filter_raw.jsonl \
@@ -56,7 +52,6 @@ python src/filters.py quality \
     --model_path bigcode/santacoder
 echo ""
 
-# ---- Step 3: score-ppl (GPU) ----
 echo "=== Step 3: PPL scoring ==="
 python src/filters.py score-ppl \
     --input_file /tmp/test_filter_raw.jsonl \
@@ -69,7 +64,6 @@ echo "--- PPL scored sample ---"
 head -1 /tmp/test_filter_ppl_scored.jsonl | python -c "import sys,json; d=json.load(sys.stdin); print(f'  ppl={d[\"ppl\"]:.2f}, content_len={len(d[\"content\"])}')"
 echo ""
 
-# ---- Step 4: filter-topk on PPL (CPU) ----
 echo "=== Step 4: filter-topk PPL (top 50%, ascending) ==="
 python src/filters.py filter-topk \
     --input_file /tmp/test_filter_ppl_scored.jsonl \
@@ -79,7 +73,6 @@ python src/filters.py filter-topk \
     --ascending
 echo ""
 
-# ---- Step 5: score-binary (GPU) ----
 echo "=== Step 5: Binary scoring ==="
 python src/filters.py score-binary \
     --input_file /tmp/test_filter_raw.jsonl \
@@ -92,7 +85,6 @@ echo "--- Binary scored sample ---"
 head -1 /tmp/test_filter_binary_scored.jsonl | python -c "import sys,json; d=json.load(sys.stdin); print(f'  score={d[\"score\"]:.4f}, content_len={len(d[\"content\"])}')"
 echo ""
 
-# ---- Step 6: filter-topk on binary score (CPU) ----
 echo "=== Step 6: filter-topk binary (top 50%, descending) ==="
 python src/filters.py filter-topk \
     --input_file /tmp/test_filter_binary_scored.jsonl \
@@ -101,7 +93,6 @@ python src/filters.py filter-topk \
     --top_percent 50
 echo ""
 
-# ---- Summary ----
 echo "=== Summary ==="
 echo "Raw:              $(wc -l < /tmp/test_filter_raw.jsonl) samples"
 echo "After compile:    $(wc -l < /tmp/test_filter_compile.jsonl) samples"

@@ -1,9 +1,3 @@
-"""Probe stable per-device training batch sizes with real backward passes.
-
-This script uses synthetic token batches with the formal seq_length and runs a
-few optimizer steps with gradient checkpointing enabled. It is meant to find a
-stable per-device training batch size ceiling for each model.
-"""
 import argparse
 import gc
 import json
@@ -147,7 +141,7 @@ def main():
         except torch.cuda.OutOfMemoryError as exc:
             status["error"] = f"OOM: {exc}"
             print(f"OOM at train batch_size={batch_size}", flush=True)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             status["error"] = f"{type(exc).__name__}: {exc}"
             print(f"FAIL at train batch_size={batch_size}: {exc}", flush=True)
         finally:

@@ -47,8 +47,8 @@ Main tracked entry points for paper-scale or benchmark-scale runs:
 
 ## Figure Assets
 
-- `assets/gated_retraining_pipeline.jpg`
-- `assets/ungated_self_training_loop.jpg`
+- `assets/review_coupling_imagegen.png`
+- `assets/review_coupling_imagegen.pdf`
 
 ## Data And Outputs
 

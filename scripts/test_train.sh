@@ -1,6 +1,4 @@
 #!/bin/bash
-# 训练流程冒烟测试：1 卡，10 步，验证能跑通
-# 用法：sbatch scripts/test_train.sh
 
 #SBATCH --job-name=test_train
 #SBATCH --gres=gpu:1

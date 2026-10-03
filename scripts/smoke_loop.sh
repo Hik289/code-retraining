@@ -1,7 +1,4 @@
 #!/bin/bash
-# 迷你 self-play loop 冒烟测试：2 轮，每轮 50 条数据 + 10 步训练 + HumanEval 评估
-# 验证完整 生成→训练→评估→下一轮 链路
-# 用法：sbatch scripts/smoke_loop.sh
 
 #SBATCH --job-name=smoke_loop
 #SBATCH --gres=gpu:2
@@ -44,7 +41,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     echo "========== Round $ROUND / $TOTAL_ROUNDS =========="
     echo "模型: $CURRENT_MODEL"
 
-    # ---- Step 1: 生成数据 ----
     DATA_FILE="$SMOKE_DIR/generated_data/round${ROUND}.jsonl"
     echo "--- Step 1: 生成 $NUM_SAMPLES 条数据 ---"
     python scripts/generate_data.py \
@@ -61,7 +57,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
 
     echo "生成了 $(wc -l < "$DATA_FILE") 条样本"
 
-    # ---- Step 2: 训练 ----
     echo "--- Step 2: 训练 $STEPS_PER_ROUND 步 ---"
     torchrun --nproc_per_node 2 --standalone train.py \
         --local_data_path "$DATA_FILE" \
@@ -89,7 +84,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
         exit 1
     fi
 
-    # ---- Step 3: HumanEval 评估 ----
     echo "--- Step 3: HumanEval 评估 ---"
     SAMPLES="$SMOKE_DIR/round${ROUND}/humaneval_samples.jsonl"
     python scripts/evalplus_generate.py \

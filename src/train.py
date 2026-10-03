@@ -1,15 +1,3 @@
-"""train.py — Multi-model self-play fine-tuning
-
-Config-driven training script supporting 4 models with different transformers versions.
-Training data is local JSONL from self-play generation (--local_data_path).
-
-Usage:
-    python src/train.py \
-        --config configs/santacoder.yaml \
-        --local_data_path results/santacoder/compile_filter/generated_data/round1.jsonl \
-        --max_steps 3000 \
-        --output_dir results/santacoder/compile_filter/round1
-"""
 import argparse
 import os
 import random
@@ -31,24 +19,18 @@ from src.config import load_model_config
 from src.fim import get_fim_token_ids, permute
 
 
-# ============================================================
-# Argument parsing
-# ============================================================
 def get_args():
     parser = argparse.ArgumentParser(description="Self-play fine-tuning (V2)")
 
-    # Model config
     parser.add_argument("--config", type=str, required=True,
                         help="Model config YAML (e.g. configs/santacoder.yaml)")
     parser.add_argument("--model_path", type=str, default=None,
                         help="HF model ID or local checkpoint (default: config model_id)")
 
-    # Data
     parser.add_argument("--local_data_path", type=str, required=True,
                         help="Training data JSONL file")
     parser.add_argument("--data_column", type=str, default="content")
 
-    # Training hyperparams
     parser.add_argument("--seq_length", type=int, default=2048)
     parser.add_argument("--max_steps", type=int, default=3000)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -59,16 +41,13 @@ def get_args():
     parser.add_argument("--weight_decay", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=0)
 
-    # FIM
     parser.add_argument("--fim_rate", type=float, default=0.5)
     parser.add_argument("--fim_spm_rate", type=float, default=0.5)
 
-    # Data loading
     parser.add_argument("--num_of_sequences", type=int, default=1024)
     parser.add_argument("--size_valid_set", type=int, default=0,
                         help="Validation set size (0 = no validation)")
 
-    # Output and logging
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--eval_freq", type=int, default=1000)
     parser.add_argument("--save_freq", type=int, default=1000)
@@ -76,18 +55,13 @@ def get_args():
     parser.add_argument("--skip_final_save", action="store_true",
                         help="Debug only: run training without writing final checkpoint")
 
-    # Gradient checkpointing (on by default)
     parser.add_argument("--no_gradient_checkpointing", action="store_false",
                         dest="gradient_checkpointing")
 
     return parser.parse_args()
 
 
-# ============================================================
-# Utilities
-# ============================================================
 def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
-    """Sample-based estimation of chars-per-token ratio."""
     total_characters, total_tokens = 0, 0
     for _, example in tqdm(zip(range(nb_examples), iter(dataset)), total=nb_examples,
                            desc="Estimating chars/token ratio"):
@@ -97,16 +71,7 @@ def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
     return total_characters / total_tokens
 
 
-# ============================================================
-# ConstantLengthDataset
-# ============================================================
 class ConstantLengthDataset(IterableDataset):
-    """Packs variable-length texts into fixed-length token sequences with FIM augmentation.
-
-    Flow: fill char buffer -> batch tokenize -> optional FIM permutation ->
-          concatenate with EOS -> slice into seq_length chunks -> shuffle.
-    labels = input_ids (CLM next-token prediction).
-    """
 
     def __init__(self, tokenizer, dataset, config, infinite=False,
                  seq_length=2048, num_of_sequences=1024,
@@ -127,7 +92,6 @@ class ConstantLengthDataset(IterableDataset):
 
         self.max_buffer_size = seq_length * chars_per_token * num_of_sequences
 
-        # FIM token IDs (config-driven, supports all 4 models)
         self.suffix_tok_id = None
         if fim_rate > 0:
             (self.suffix_tok_id, self.prefix_tok_id,
@@ -185,9 +149,6 @@ class ConstantLengthDataset(IterableDataset):
                 }
 
 
-# ============================================================
-# Dataset creation
-# ============================================================
 def create_datasets(tokenizer, config, args):
     dataset = load_dataset("json",
                            data_files={"train": args.local_data_path},
@@ -223,9 +184,6 @@ def create_datasets(tokenizer, config, args):
     return train_dataset, valid_dataset
 
 
-# ============================================================
-# Training
-# ============================================================
 def run_training(args):
     cfg = load_model_config(args.config)
     model_path = args.model_path or cfg["model_id"]
@@ -236,23 +194,18 @@ def run_training(args):
     print(f"Steps: {args.max_steps}, LR: {args.learning_rate}, "
           f"BS: {args.batch_size} x {args.gradient_accumulation_steps}")
 
-    # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(
         model_path, trust_remote_code=cfg.get("trust_remote_code", False),
     )
 
-    # ---- Model ----
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         trust_remote_code=cfg.get("trust_remote_code", False),
         use_cache=not args.gradient_checkpointing,
     )
 
-    # ---- Dataset ----
     train_dataset, valid_dataset = create_datasets(tokenizer, cfg, args)
 
-    # ---- TrainingArguments ----
-    # The keyword changed across Transformers releases; inspect the installed API.
     import inspect
 
     eval_kwargs = {}
@@ -295,7 +248,6 @@ def run_training(args):
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    # ---- Train ----
     trainer.train()
 
     if torch.cuda.is_available():
@@ -304,7 +256,6 @@ def run_training(args):
         print(f"Peak CUDA memory allocated: {peak_mem:.2f} GiB")
         print(f"Peak CUDA memory reserved: {peak_reserved:.2f} GiB")
 
-    # ---- Save final checkpoint ----
     final_ckpt = os.path.join(args.output_dir, "final_checkpoint")
     if args.skip_final_save:
         print("Skipping final checkpoint save (--skip_final_save).")
@@ -312,7 +263,6 @@ def run_training(args):
         trainer.save_model(final_ckpt)
         tokenizer.save_pretrained(final_ckpt)
 
-        # Training uses use_cache=False (gradient checkpointing), restore for inference
         import json
         gen_cfg_path = os.path.join(final_ckpt, "generation_config.json")
         if os.path.exists(gen_cfg_path):
@@ -325,7 +275,6 @@ def run_training(args):
             with open(gen_cfg_path, "w") as f:
                 json.dump({"use_cache": True}, f, indent=2)
 
-    # ---- Report final loss ----
     log_history = trainer.state.log_history
     train_losses = [e["loss"] for e in log_history if "loss" in e]
     final_loss = train_losses[-1] if train_losses else None

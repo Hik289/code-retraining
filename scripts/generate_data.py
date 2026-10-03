@@ -1,16 +1,3 @@
-"""scripts/generate_data.py — Self-play 数据生成脚本
-
-从 The Stack Python 流式加载，取每个文件前 1024 tokens 作 prompt，
-用模型生成后续 1024 tokens，保存为训练兼容的 JSONL。
-
-用法：
-    python scripts/generate_data.py \
-        --model_path bigcode/santacoder \
-        --output_file selfplay_results/generated_data/round1.jsonl \
-        --num_samples 5000 --seed 1
-
-要求 transformers==4.35.2。
-"""
 import argparse
 import glob
 import json
@@ -27,14 +14,12 @@ def parse_args():
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--output_file", type=str, required=True)
 
-    # 数据源（二选一）
     parser.add_argument("--dataset_name", type=str,
                         default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default="data/python")
     parser.add_argument("--local_dataset_path", type=str, default=None,
                         help="本地 Arrow 缓存目录（HF Hub 不可达时使用）")
 
-    # 生成参数
     parser.add_argument("--num_samples", type=int, default=5000)
     parser.add_argument("--prompt_tokens", type=int, default=1024)
     parser.add_argument("--max_new_tokens", type=int, default=1024)
@@ -44,7 +29,6 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top_p", type=float, default=0.95)
 
-    # 采样
     parser.add_argument("--shuffle_buffer", type=int, default=50000)
     parser.add_argument("--seed", type=int, default=1,
                         help="每轮传不同 seed，实现近似随机采样")
@@ -52,9 +36,7 @@ def parse_args():
 
 
 def load_dataset_iter(args):
-    """加载数据集，返回流式迭代器。"""
     if args.local_dataset_path:
-        # 本地 Arrow 缓存：过滤掉 cache-*.arrow 索引文件（schema 不兼容）
         data_files = sorted([
             f for f in glob.glob(os.path.join(args.local_dataset_path, "*.arrow"))
             if not os.path.basename(f).startswith("cache-")
@@ -77,14 +59,12 @@ def main():
     args = parse_args()
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, trust_remote_code=True
     )
-    tokenizer.pad_token = tokenizer.eos_token   # SantaCoder 无 pad_token
-    tokenizer.padding_side = "left"             # causal LM 生成要求左侧 padding
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
-    # ---- Model ----
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         trust_remote_code=True,
@@ -93,10 +73,8 @@ def main():
     model.eval()
     device = next(model.parameters()).device
 
-    # ---- 数据 ----
     data_iter = load_dataset_iter(args)
 
-    # ---- 批量推理 ----
     count = 0
     batch_prompts = []
 

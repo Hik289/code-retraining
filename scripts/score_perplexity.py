@@ -1,15 +1,3 @@
-"""scripts/score_perplexity.py — 计算生成数据的 completion 部分 perplexity
-
-对每条样本，只计算 completion 部分（prompt 之后）的 PPL。
-prompt 部分的 label 设为 -100（忽略）。
-
-用法：
-    python scripts/score_perplexity.py \
-        --input_file selfplay_results/generated_data/round1.jsonl \
-        --output_file selfplay_results/generated_data/round1_scored.jsonl \
-        --model_path bigcode/santacoder \
-        --prompt_tokens 1024
-"""
 import argparse
 import json
 import math
@@ -35,25 +23,18 @@ def parse_args():
 
 
 def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device):
-    """Compute per-sample PPL for a batch, only on completion tokens."""
     encodings = tokenizer(
         texts, return_tensors="pt", padding=True,
         truncation=True, max_length=max_length,
     ).to(device)
 
-    input_ids = encodings["input_ids"]          # (B, L)
-    attention_mask = encodings["attention_mask"] # (B, L)
+    input_ids = encodings["input_ids"]
+    attention_mask = encodings["attention_mask"]
 
-    # Labels: copy input_ids, mask prompt and padding
     labels = input_ids.clone()
-    # Mask padding
     labels[attention_mask == 0] = -100
-    # Mask prompt tokens (first prompt_tokens non-padding tokens per sample)
-    # Since padding_side="left", real tokens start from the right
     for i in range(labels.size(0)):
-        # Find where real tokens start
         real_start = (attention_mask[i] == 0).sum().item()
-        # Mask prompt portion
         mask_end = min(real_start + prompt_tokens, labels.size(1))
         labels[i, :mask_end] = -100
 
@@ -61,21 +42,17 @@ def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device
         outputs = model(input_ids=input_ids, attention_mask=attention_mask,
                         labels=labels)
 
-    # outputs.loss is averaged over all non-ignored tokens across the batch
-    # We need per-sample loss, so compute manually
-    logits = outputs.logits  # (B, L, V)
+    logits = outputs.logits
     shift_logits = logits[:, :-1, :].contiguous()
     shift_labels = labels[:, 1:].contiguous()
 
     loss_fn = torch.nn.CrossEntropyLoss(reduction="none")
-    # (B, L-1)
     per_token_loss = loss_fn(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),
     ).view(shift_labels.size())
 
-    # Per-sample mean loss (only over non-ignored tokens)
-    mask = shift_labels != -100  # (B, L-1)
+    mask = shift_labels != -100
     ppls = []
     for i in range(input_ids.size(0)):
         sample_mask = mask[i]
@@ -92,7 +69,6 @@ def main():
     args = parse_args()
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    # Load data
     samples = []
     with open(args.input_file) as f:
         for line in f:
@@ -101,7 +77,6 @@ def main():
                 samples.append(json.loads(line))
     print(f"Loaded {len(samples)} samples from {args.input_file}")
 
-    # Model & tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, trust_remote_code=True
     )
@@ -116,7 +91,6 @@ def main():
     model.eval()
     device = next(model.parameters()).device
 
-    # Score in batches
     all_ppls = []
     for i in tqdm(range(0, len(samples), args.batch_size), desc="Scoring PPL"):
         batch = samples[i:i + args.batch_size]
@@ -125,13 +99,11 @@ def main():
                                  args.prompt_tokens, args.max_length, device)
         all_ppls.extend(ppls)
 
-    # Write output
     with open(args.output_file, "w") as f:
         for sample, ppl in zip(samples, all_ppls):
             sample["ppl"] = ppl
             f.write(json.dumps(sample) + "\n")
 
-    # Statistics
     finite_ppls = [p for p in all_ppls if math.isfinite(p)]
     if finite_ppls:
         arr = np.array(finite_ppls)

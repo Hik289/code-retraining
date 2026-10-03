@@ -1,6 +1,4 @@
 #!/bin/bash
-# The Stack baseline（30K 步，Python，FIM 0.5，2 卡数据并行）— self-play 的参照上限
-# 用法：sbatch scripts/run_thestack_baseline.sh
 
 #SBATCH --job-name=thestack_baseline
 #SBATCH --gres=gpu:2
@@ -13,12 +11,10 @@
 
 set -euo pipefail
 
-# ---- 项目根目录 ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# ---- 环境 ----
 source "$PROJECT_DIR/venv/bin/activate"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -33,7 +29,6 @@ echo "GPU 数: 2"
 echo "等效全局 batch: 2 GPU × 2 batch × 4 grad_accum = 16"
 echo "总步数: 30000"
 
-# 2 卡数据并行：grad_accum=4（等效全局 batch = 2×2×4 = 16）
 torchrun --nproc_per_node 2 --standalone train.py \
     --local_arrow_path "$ARROW_CACHE" \
     --data_column content \

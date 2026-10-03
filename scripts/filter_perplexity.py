@@ -1,11 +1,3 @@
-"""scripts/filter_perplexity.py — 按 PPL 过滤，保留前 K%
-
-用法：
-    python scripts/filter_perplexity.py \
-        --input_file selfplay_results/generated_data/round1_scored.jsonl \
-        --output_file selfplay_results/generated_data/round1_ppl_filtered.jsonl \
-        --top_percent 25
-"""
 import argparse
 import json
 import math
@@ -21,7 +13,6 @@ def main():
                         help="保留 PPL 最低的前 N%%")
     args = parser.parse_args()
 
-    # Load scored samples
     samples = []
     with open(args.input_file) as f:
         for line in f:
@@ -29,24 +20,19 @@ def main():
             if line:
                 samples.append(json.loads(line))
 
-    # Filter out inf PPL
     valid = [(i, s) for i, s in enumerate(samples) if math.isfinite(s.get("ppl", float("inf")))]
     invalid_count = len(samples) - len(valid)
 
-    # Sort by PPL ascending (lower = better)
     valid.sort(key=lambda x: x[1]["ppl"])
 
-    # Keep top K%
     keep_count = max(1, int(len(valid) * args.top_percent / 100))
     kept = valid[:keep_count]
 
-    # Write output (remove ppl field to keep clean training data)
     with open(args.output_file, "w") as f:
         for _, sample in kept:
             out = {k: v for k, v in sample.items() if k != "ppl"}
             f.write(json.dumps(out) + "\n")
 
-    # Statistics
     ppls = np.array([s["ppl"] for _, s in valid])
     kept_ppls = np.array([s["ppl"] for _, s in kept])
     print("\n===== PPL 过滤统计 =====")

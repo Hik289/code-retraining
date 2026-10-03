@@ -1,8 +1,3 @@
-"""Probe stable self-play generation batch sizes for different models.
-
-This runs a few real generation batches using the same prompt/max_new_tokens
-settings as formal self-play and reports whether each batch size succeeds.
-"""
 import argparse
 import gc
 import glob
@@ -17,9 +12,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.config import load_model_config
 
 
-# Path to a locally cached The Stack (dedup, Python) Arrow dataset directory.
-# Set the THE_STACK_ARROW_CACHE environment variable to point at it, or pass
-# --local_dataset_path on the command line. Falls back to streaming from the Hub.
 DEFAULT_ARROW_CACHE = os.environ.get("THE_STACK_ARROW_CACHE", "")
 
 
@@ -173,7 +165,7 @@ def main():
         except StopIteration:
             status["error"] = "Dataset exhausted while collecting prompts"
             print("Dataset exhausted unexpectedly", flush=True)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             status["error"] = f"{type(exc).__name__}: {exc}"
             print(f"FAIL at batch_size={batch_size}: {exc}", flush=True)
         finally:

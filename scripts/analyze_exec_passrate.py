@@ -1,14 +1,3 @@
-"""scripts/analyze_exec_passrate.py — analyze exec() pass rate on generated JSONL data
-
-Runs each sample through exec() in a subprocess with a timeout.
-Reports pass/fail breakdown by exception type.
-
-Usage:
-    python scripts/analyze_exec_passrate.py \
-        --input_file selfplay_results/ppl_filter/generated_data/round1_raw.jsonl \
-        --timeout 5 \
-        --max_samples 500
-"""
 import argparse
 import json
 import multiprocessing
@@ -17,7 +6,6 @@ from collections import Counter
 
 
 def exec_worker(code: str, result_queue):
-    """Run in a child process: exec code and put result into queue."""
     try:
         exec(compile(code, "<string>", "exec"), {})
         result_queue.put(("ok", None))
@@ -40,7 +28,6 @@ def exec_worker(code: str, result_queue):
 
 
 def run_with_timeout(code: str, timeout: int) -> str:
-    """Run exec() in subprocess, return result label."""
     q = multiprocessing.Queue()
     p = multiprocessing.Process(target=exec_worker, args=(code, q))
     p.start()

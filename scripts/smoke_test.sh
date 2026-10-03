@@ -1,7 +1,4 @@
 #!/bin/bash
-# 冒烟测试：短训练 10 步 → 从 checkpoint 加载推理 → EvalPlus 评估
-# 验证 tokenizer 保存/加载链路正确
-# 用法：sbatch scripts/smoke_test.sh
 
 #SBATCH --job-name=smoke_test
 #SBATCH --gres=gpu:2

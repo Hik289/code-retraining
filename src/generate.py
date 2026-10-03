@@ -1,28 +1,3 @@
-"""Multi-model self-play data generation.
-
-Streams Python files from The Stack, uses the first ``prompt_tokens`` tokens
-as context, generates ``max_new_tokens`` continuation tokens, and writes JSONL.
-
-Two modes are supported:
-  1. Without ``--filter_mode``, generate ``num_samples`` records once.
-  2. With ``compile`` or ``compile+quality``, continue until ``num_samples``
-     records pass the selected filter.
-
-Perplexity and binary filtering are handled separately by ``src/filters.py``.
-
-Usage:
-    # No inline filter
-    python src/generate.py --config configs/santacoder.yaml \
-        --model_path bigcode/santacoder \
-        --output_file results/santacoder/no_filter/generated_data/round1.jsonl \
-        --num_samples 5000 --seed 1
-
-    # Compile filter
-    python src/generate.py --config configs/santacoder.yaml \
-        --model_path bigcode/santacoder \
-        --output_file results/santacoder/compile_filter/generated_data/round1.jsonl \
-        --num_samples 5000 --seed 1 --filter_mode compile
-"""
 import argparse
 import glob
 import json
@@ -37,10 +12,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.config import load_model_config
 
 
-# ===================== Inline Filters =====================
 
 def check_compile(code: str) -> bool:
-    """Return True if code passes compile() syntax check."""
     try:
         compile(code, "<string>", "exec")
         return True
@@ -49,7 +22,6 @@ def check_compile(code: str) -> bool:
 
 
 def check_repetition(code: str, threshold: float = 0.5) -> bool:
-    """Return True if line-level repetition rate is below threshold."""
     lines = [l.strip() for l in code.split("\n") if l.strip()]
     if len(lines) <= 1:
         return True
@@ -61,7 +33,6 @@ def check_repetition(code: str, threshold: float = 0.5) -> bool:
 
 def check_length(code: str, prompt_tokens: int, tokenizer,
                  min_completion_tokens: int = 50) -> bool:
-    """Return True if completion part has at least min_completion_tokens tokens."""
     tokens = tokenizer(code, truncation=False)["input_ids"]
     completion_len = len(tokens) - prompt_tokens
     return completion_len >= min_completion_tokens
@@ -69,11 +40,6 @@ def check_length(code: str, prompt_tokens: int, tokenizer,
 
 def apply_filter(text, filter_mode, prompt_tokens, tokenizer,
                  repetition_threshold=0.5, min_completion_tokens=50):
-    """Apply inline filter chain.
-
-    Returns:
-        (passed: bool, reject_reason: str or None)
-    """
     if filter_mode is None:
         return True, None
 
@@ -90,13 +56,11 @@ def apply_filter(text, filter_mode, prompt_tokens, tokenizer,
     return True, None
 
 
-# ===================== Data Loading =====================
 
 DEFAULT_ARROW_CACHE = os.environ.get("THE_STACK_ARROW_CACHE", "")
 
 
 def load_dataset_iter(args):
-    """Load The Stack and return a shuffled streaming iterator."""
     if args.local_dataset_path:
         arrow_dir = args.local_dataset_path
     elif os.path.isdir(DEFAULT_ARROW_CACHE):
@@ -121,7 +85,6 @@ def load_dataset_iter(args):
     return iter(dataset)
 
 
-# ===================== Main =====================
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Self-play data generation")
@@ -131,14 +94,12 @@ def parse_args():
                         help="HF model ID or local checkpoint path")
     parser.add_argument("--output_file", type=str, required=True)
 
-    # Data source
     parser.add_argument("--dataset_name", type=str,
                         default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default="data/python")
     parser.add_argument("--local_dataset_path", type=str, default=None,
                         help="Local Arrow cache directory (overrides default)")
 
-    # Generation params
     parser.add_argument("--num_samples", type=int, default=5000)
     parser.add_argument("--prompt_tokens", type=int, default=1024)
     parser.add_argument("--max_new_tokens", type=int, default=1024)
@@ -147,11 +108,9 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top_p", type=float, default=0.95)
 
-    # Sampling
     parser.add_argument("--shuffle_buffer", type=int, default=50000)
     parser.add_argument("--seed", type=int, default=1)
 
-    # Filter (optional — only for compile / compile+quality)
     parser.add_argument("--filter_mode", type=str, default=None,
                         choices=["compile", "compile+quality"],
                         help="Inline filter mode (omit for no filtering)")
@@ -166,16 +125,14 @@ def main():
     cfg = load_model_config(args.config)
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
 
-    # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path,
         trust_remote_code=cfg.get("trust_remote_code", False),
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "left"  # causal LM generation requires left padding
+    tokenizer.padding_side = "left"
 
-    # ---- Model ----
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         trust_remote_code=cfg.get("trust_remote_code", False),
@@ -184,10 +141,8 @@ def main():
     model.eval()
     device = next(model.parameters()).device
 
-    # ---- Data ----
     data_iter = load_dataset_iter(args)
 
-    # ---- Generate ----
     total_generated = 0
     passed = 0
     reject_counts = Counter()
@@ -197,7 +152,6 @@ def main():
         pbar = tqdm(total=args.num_samples, desc=f"Generating ({mode_str})")
 
         while passed < args.num_samples:
-            # Collect batch of prompts
             batch_prompts = []
             while len(batch_prompts) < args.batch_size:
                 try:
@@ -216,7 +170,6 @@ def main():
                 print("WARNING: dataset exhausted, stopping early")
                 break
 
-            # Generate
             inputs = tokenizer(
                 batch_prompts, return_tensors="pt", padding=True,
                 truncation=True, max_length=args.prompt_tokens,
@@ -232,7 +185,6 @@ def main():
                     use_cache=True,
                 )
 
-            # Write (with optional filter)
             for seq in outputs:
                 full_text = tokenizer.decode(seq, skip_special_tokens=True)
                 total_generated += 1
@@ -252,7 +204,6 @@ def main():
 
         pbar.close()
 
-    # ---- Stats ----
     rate = passed / total_generated * 100 if total_generated > 0 else 0
     print(f"\n===== Generation stats ({mode_str}) =====")
     print(f"Model: {cfg['short_name']} ({args.model_path})")
@@ -262,7 +213,6 @@ def main():
         print(f"Rejected [{reason}]: {cnt}")
     print(f"Output: {args.output_file}")
 
-    # Return stats for run_experiment.sh to capture
     return {
         "total_generated": total_generated,
         "passed": passed,

@@ -1,7 +1,4 @@
 #!/bin/bash
-# Smoke test: Exp D Binary Classifier Filter
-# 用法：sbatch scripts/smoke_test_binary_filter.sh
-# 复用已有数据（ppl_filter/round1_raw.jsonl），无需重新生成
 
 #SBATCH --job-name=smoke_binary
 #SBATCH --gres=gpu:1
@@ -34,7 +31,6 @@ mkdir -p "$TEST_DIR" selfplay_results/logs
 PASS=0
 FAIL=0
 
-# ========== Test 1: Token ID check ==========
 echo ""
 echo "===== [Test 1/3] Token ID check ====="
 if python - <<'EOF'
@@ -56,7 +52,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== Test 2: score_binary_classifier.py ==========
 echo ""
 echo "===== [Test 2/3] score_binary_classifier.py (20 samples) ====="
 head -n 20 "$EXISTING_DATA" > "$TEST_DIR/mini.jsonl"
@@ -67,7 +62,6 @@ if python scripts/score_binary_classifier.py \
     --output_file "$SCORED" \
     --model_path "$BASE_MODEL" \
     --batch_size 4; then
-    # Verify scores are finite and vary
     python - <<'EOF'
 import json, math
 samples = [json.loads(l) for l in open("selfplay_results/smoke_binary/mini_scored.jsonl")]
@@ -85,7 +79,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== Test 3: filter_binary_classifier.py ==========
 echo ""
 echo "===== [Test 3/3] filter_binary_classifier.py (score > 0) ====="
 FILTERED="$TEST_DIR/mini_filtered.jsonl"
@@ -111,7 +104,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== Summary ==========
 echo ""
 echo "====================================="
 echo "Smoke test: $PASS passed, $FAIL failed (total $((PASS + FAIL)))"

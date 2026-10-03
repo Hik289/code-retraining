@@ -1,19 +1,3 @@
-"""scripts/generate_data_filtered.py — Self-play 数据生成 + 在线过滤
-
-与 generate_data.py 相同的生成逻辑，但每批生成后立即做过滤，
-只保留通过过滤的样本。循环生成直到过滤后累积达到 num_samples 条。
-
-支持的过滤模式：
-  --filter_mode compile        Exp A: compile() 语法检查
-  --filter_mode compile+quality  Exp B: compile + 重复度 + 长度过滤
-
-用法：
-    python scripts/generate_data_filtered.py \
-        --model_path bigcode/santacoder \
-        --output_file selfplay_results/generated_data/round1_filtered.jsonl \
-        --num_samples 5000 --seed 1 \
-        --filter_mode compile
-"""
 import argparse
 import glob
 import json
@@ -26,10 +10,8 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# ===================== Filters =====================
 
 def check_compile(code: str) -> bool:
-    """Return True if code passes compile() syntax check."""
     try:
         compile(code, "<string>", "exec")
         return True
@@ -38,12 +20,6 @@ def check_compile(code: str) -> bool:
 
 
 def check_repetition(code: str, threshold: float = 0.5) -> bool:
-    """Return True if line-level repetition rate is below threshold.
-
-    Line-level repetition = fraction of non-empty lines that are duplicates.
-    Code naturally has repeated char n-grams (indentation, keywords), so
-    line-level is a better signal for degenerate repetition.
-    """
     lines = [l.strip() for l in code.split("\n") if l.strip()]
     if len(lines) <= 1:
         return True
@@ -54,26 +30,22 @@ def check_repetition(code: str, threshold: float = 0.5) -> bool:
 
 
 def check_length(code: str, prompt_tokens: int, tokenizer, min_completion_tokens: int = 50) -> bool:
-    """Return True if completion part has at least min_completion_tokens tokens."""
     tokens = tokenizer(code, truncation=False)["input_ids"]
     completion_len = len(tokens) - prompt_tokens
     return completion_len >= min_completion_tokens
 
 
-# ===================== Args =====================
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--output_file", type=str, required=True)
 
-    # 数据源
     parser.add_argument("--dataset_name", type=str,
                         default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default="data/python")
     parser.add_argument("--local_dataset_path", type=str, default=None)
 
-    # 生成参数
     parser.add_argument("--num_samples", type=int, default=5000,
                         help="过滤后需要的样本数")
     parser.add_argument("--prompt_tokens", type=int, default=1024)
@@ -83,11 +55,9 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top_p", type=float, default=0.95)
 
-    # 采样
     parser.add_argument("--shuffle_buffer", type=int, default=50000)
     parser.add_argument("--seed", type=int, default=1)
 
-    # 过滤
     parser.add_argument("--filter_mode", type=str, default="compile",
                         choices=["compile", "compile+quality"],
                         help="compile: 仅语法检查; compile+quality: 语法+重复度+长度")
@@ -100,7 +70,6 @@ def parse_args():
 
 
 def load_dataset_iter(args):
-    """加载数据集，返回流式迭代器。"""
     if args.local_dataset_path:
         data_files = sorted([
             f for f in glob.glob(os.path.join(args.local_dataset_path, "*.arrow"))
@@ -121,7 +90,6 @@ def load_dataset_iter(args):
 
 
 def apply_filter(text, args, tokenizer):
-    """Apply filter chain. Returns (pass: bool, reject_reason: str or None)."""
     if not check_compile(text):
         return False, "compile"
 
@@ -139,14 +107,12 @@ def main():
     args = parse_args()
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, trust_remote_code=True
     )
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
-    # ---- Model ----
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         trust_remote_code=True,
@@ -155,20 +121,16 @@ def main():
     model.eval()
     device = next(model.parameters()).device
 
-    # ---- 数据 ----
     data_iter = load_dataset_iter(args)
 
-    # ---- 统计 ----
     total_generated = 0
     passed = 0
     reject_counts = Counter()
 
-    # ---- 循环生成+过滤 ----
     with open(args.output_file, "w") as fout:
         pbar = tqdm(total=args.num_samples, desc=f"Generating ({args.filter_mode})")
 
         while passed < args.num_samples:
-            # 收集一批 prompt
             batch_prompts = []
             while len(batch_prompts) < args.batch_size:
                 try:
@@ -187,7 +149,6 @@ def main():
                 print("WARNING: 数据集耗尽，提前停止")
                 break
 
-            # 生成
             inputs = tokenizer(
                 batch_prompts, return_tensors="pt", padding=True,
                 truncation=True, max_length=args.prompt_tokens,
@@ -203,7 +164,6 @@ def main():
                     use_cache=True,
                 )
 
-            # 逐条过滤
             for seq in outputs:
                 full_text = tokenizer.decode(seq, skip_special_tokens=True)
                 total_generated += 1
@@ -222,7 +182,6 @@ def main():
 
         pbar.close()
 
-    # ---- 打印统计 ----
     rate = passed / total_generated * 100 if total_generated > 0 else 0
     print(f"\n===== 过滤统计 ({args.filter_mode}) =====")
     print(f"总生成: {total_generated}")

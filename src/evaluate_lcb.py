@@ -1,9 +1,3 @@
-"""LiveCodeBench evaluation for V2 experiments.
-
-Generates code for LiveCodeBench code_generation_lite and evaluates pass@1.
-This intentionally bypasses the upstream vLLM runner so SantaCoder can keep its
-transformers==4.35.2 environment.
-"""
 import argparse
 import json
 import os
@@ -81,7 +75,6 @@ def load_few_shot_examples():
 
 
 def format_prompt(question, func_examples, stdin_examples):
-    """Build the same 1-shot GenericBase prompt as LiveCodeBench."""
     has_starter = bool(question.starter_code)
     example = (func_examples if has_starter else stdin_examples)[0]
 

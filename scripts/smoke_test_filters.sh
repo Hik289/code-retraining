@@ -1,7 +1,4 @@
 #!/bin/bash
-# Smoke test: 验证三个过滤实验的脚本能跑通
-# 用法：sbatch scripts/smoke_test_filters.sh
-# GPU smoke test with a deliberately small sample count.
 
 #SBATCH --job-name=smoke_filter
 #SBATCH --gres=gpu:1
@@ -34,7 +31,6 @@ mkdir -p "$TEST_DIR" selfplay_results/logs
 PASS=0
 FAIL=0
 
-# ========== Exp A: compile filter ==========
 echo ""
 echo "===== [Test 1/4] Exp A: generate_data_filtered.py --filter_mode compile ====="
 OUT_A="$TEST_DIR/expA.jsonl"
@@ -58,7 +54,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== Exp B: compile+quality filter ==========
 echo ""
 echo "===== [Test 2/4] Exp B: generate_data_filtered.py --filter_mode compile+quality ====="
 OUT_B="$TEST_DIR/expB.jsonl"
@@ -84,9 +79,7 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== Exp C: PPL filter (3 steps) ==========
 
-# Step C1: 用 generate_data.py 生成原始数据
 echo ""
 echo "===== [Test 3/4] Exp C Step 1: generate_data.py (无过滤) ====="
 OUT_C_RAW="$TEST_DIR/expC_raw.jsonl"
@@ -109,7 +102,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# Step C2: PPL 打分
 echo ""
 echo "===== [Test 4/4] Exp C Step 2+3: score_perplexity.py + filter_perplexity.py ====="
 OUT_C_SCORED="$TEST_DIR/expC_scored.jsonl"
@@ -123,7 +115,6 @@ if python scripts/score_perplexity.py \
     LINES_SCORED=$(wc -l < "$OUT_C_SCORED")
     echo "PPL 打分完成: $LINES_SCORED 条"
 
-    # Step C3: PPL 过滤
     if python scripts/filter_perplexity.py \
         --input_file "$OUT_C_SCORED" \
         --output_file "$OUT_C_FINAL" \
@@ -140,18 +131,15 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# ========== 汇总 ==========
 echo ""
 echo "====================================="
 echo "Smoke test 结果: $PASS passed, $FAIL failed (共 $((PASS + FAIL)))"
 echo "====================================="
 
-# 展示输出文件
 echo ""
 echo "输出文件:"
 ls -lh "$TEST_DIR"/*.jsonl 2>/dev/null || true
 
-# 抽样检查内容格式
 echo ""
 echo "--- Exp A 第一条样本 (前 200 字符) ---"
 head -1 "$OUT_A" 2>/dev/null | python -c "import sys,json; d=json.load(sys.stdin); print(list(d.keys())); print(d['content'][:200])" 2>/dev/null || echo "(无)"

@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# ---- Environment ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
@@ -30,7 +29,6 @@ echo ""
 OUT_DIR="/tmp/test_evalplus_all"
 mkdir -p "$OUT_DIR"
 
-# Helper function: run evalplus for one model (humaneval + mbpp)
 run_model_eval() {
     local MODEL_NAME="$1"
     local CONFIG="$2"
@@ -69,31 +67,26 @@ run_model_eval() {
     deactivate
 }
 
-# ---- 1. SantaCoder (venv with transformers==4.35.2) ----
 run_model_eval "santacoder" \
     "configs/santacoder.yaml" \
     "bigcode/santacoder" \
     "$PROJECT_DIR/venv"
 
-# ---- 2. StarCoder2-3B (general venv with transformers>=4.39) ----
 run_model_eval "starcoder2" \
     "configs/starcoder2.yaml" \
     "bigcode/starcoder2-3b" \
     "$PROJECT_DIR/venvs/general"
 
-# ---- 3. Qwen2.5-Coder-1.5B ----
 run_model_eval "qwen25" \
     "configs/qwen25.yaml" \
     "Qwen/Qwen2.5-Coder-1.5B" \
     "$PROJECT_DIR/venvs/general"
 
-# ---- 4. Code Llama 7B ----
 run_model_eval "codellama" \
     "configs/codellama.yaml" \
     "codellama/CodeLlama-7b-hf" \
     "$PROJECT_DIR/venvs/general"
 
-# ---- Summary ----
 echo ""
 echo "============================================"
 echo "=== SUMMARY ==="

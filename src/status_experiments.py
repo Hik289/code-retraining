@@ -1,9 +1,3 @@
-"""Summarize V2 experiment progress from results CSVs and SLURM queue.
-
-Usage:
-    python src/status_experiments.py
-    python src/status_experiments.py --root results_smoke
-"""
 import argparse
 import csv
 import os

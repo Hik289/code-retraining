@@ -1,17 +1,3 @@
-"""evaluate_evalplus.py — Generate completions and evaluate with EvalPlus
-
-Handles both HumanEval/HumanEval+ and MBPP/MBPP+.
-Loads model ourselves (bypassing evalplus.codegen which uses attn_implementation
-that SantaCoder doesn't support), generates completions, then calls
-evalplus.evaluate to get pass@1 scores.
-
-Usage:
-    python src/evaluate_evalplus.py \
-        --config configs/santacoder.yaml \
-        --model_path results/santacoder/compile/round1/final_checkpoint \
-        --dataset humaneval \
-        --output_file evalplus_results/humaneval/santacoder_compile_r1.jsonl
-"""
 import argparse
 import json
 import os
@@ -47,7 +33,6 @@ def parse_args():
 
 
 def truncate_at_stop(text, stop_sequences):
-    """Truncate text at the first occurrence of any stop sequence."""
     min_idx = len(text)
     for stop in stop_sequences:
         idx = text.find(stop)
@@ -57,10 +42,8 @@ def truncate_at_stop(text, stop_sequences):
 
 
 def generate_samples(args, cfg):
-    """Generate completions for all tasks in the dataset."""
     model_path = args.model_path or cfg["model_id"]
 
-    # Load tasks
     if args.dataset == "humaneval":
         from evalplus.data import get_human_eval_plus
         tasks = get_human_eval_plus()
@@ -75,7 +58,6 @@ def generate_samples(args, cfg):
 
     stop_sequences = cfg.get(stop_key, [])
 
-    # Load model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_path, trust_remote_code=cfg.get("trust_remote_code", False),
     )
@@ -90,7 +72,6 @@ def generate_samples(args, cfg):
 
     results = []
     for task_id, task in tqdm(tasks.items(), desc=f"Generating {args.dataset}"):
-        # Strip trailing whitespace — critical for SantaCoder to avoid empty output
         prompt = task["prompt"].strip()
 
         for sample_idx in range(args.n_samples):
@@ -111,11 +92,9 @@ def generate_samples(args, cfg):
             with torch.no_grad():
                 output = model.generate(input_ids, **gen_kwargs)
 
-            # Extract only the generated portion
             generated_ids = output[0, input_ids.size(-1):]
             completion = tokenizer.decode(generated_ids, skip_special_tokens=True)
             completion = truncate_at_stop(completion, stop_sequences)
-            # Normalize tabs to 4 spaces (evalplus convention)
             completion = completion.replace("\t", "    ")
 
             results.append({
@@ -128,12 +107,6 @@ def generate_samples(args, cfg):
 
 
 def run_evaluate(samples_file, dataset):
-    """Run evalplus.evaluate and parse results.
-
-    Returns dict with pass@1 scores for base and plus versions.
-    """
-    # Delete old eval_results.json to force re-evaluation
-    # (evalplus.evaluate reuses a cached result file if present)
     result_path = samples_file.replace(".jsonl", "_eval_results.json")
     if os.path.isfile(result_path):
         os.remove(result_path)
@@ -142,7 +115,6 @@ def run_evaluate(samples_file, dataset):
     from evalplus.evaluate import evaluate
     evaluate(dataset=dataset, samples=samples_file, i_just_wanna_run=True)
 
-    # Parse the eval_results.json written by evalplus
     if not os.path.isfile(result_path):
         print(f"WARNING: {result_path} not found after evaluation")
         return {}
@@ -150,8 +122,6 @@ def run_evaluate(samples_file, dataset):
     with open(result_path) as f:
         eval_results = json.load(f)
 
-    # Extract pass@1 from the eval results
-    # Structure: {"eval": {task_id: [{"base_status": "pass"|"fail", "plus_status": ...}, ...]}}
     scores = {}
     eval_data = eval_results.get("eval", {})
     if not eval_data:
@@ -183,7 +153,6 @@ def main():
     print(f"Dataset: {args.dataset}")
     print(f"Temperature: {args.temperature}, n_samples: {args.n_samples}")
 
-    # Generate completions
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
     results = generate_samples(args, cfg)
 
@@ -192,7 +161,6 @@ def main():
             f.write(json.dumps(r) + "\n")
     print(f"Wrote {len(results)} samples to {args.output_file}")
 
-    # Evaluate
     if args.skip_evaluate:
         print("\nSkipping EvalPlus evaluation (generation-only smoke mode).")
         scores = {
@@ -210,7 +178,6 @@ def main():
         else:
             print(f"  {k}: {v}")
 
-    # Write scores to a companion JSON
     scores_file = args.output_file.replace(".jsonl", "_scores.json")
     scores["model"] = cfg["short_name"]
     scores["model_path"] = model_path

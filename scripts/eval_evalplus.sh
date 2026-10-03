@@ -11,12 +11,10 @@
 
 set -euo pipefail
 
-# ---- 项目根目录 ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# ---- 环境 ----
 source "$PROJECT_DIR/venv/bin/activate"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -42,7 +40,6 @@ for DATASET in $DATASETS; do
         --temperature 0.2
 
     echo "===== 评估 $DATASET ====="
-    # 删除旧结果文件，避免 evalplus 交互式 overwrite 提示导致 EOFError
     EVAL_RESULT="${SAMPLES%.jsonl}_eval_results.json"
     rm -f "$EVAL_RESULT"
     evalplus.evaluate \

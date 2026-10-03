@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# ---- Environment ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
@@ -28,7 +27,6 @@ echo "=== GPU info ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo ""
 
-# ---- Step 1: HumanEval with SantaCoder (base model, greedy) ----
 echo "=== Step 1: HumanEval evaluation (SantaCoder, greedy) ==="
 python src/evaluate_evalplus.py \
     --config configs/santacoder.yaml \
@@ -40,7 +38,6 @@ python src/evaluate_evalplus.py \
 
 echo ""
 
-# ---- Step 2: MBPP with SantaCoder (base model, greedy) ----
 echo "=== Step 2: MBPP evaluation (SantaCoder, greedy) ==="
 python src/evaluate_evalplus.py \
     --config configs/santacoder.yaml \
@@ -52,7 +49,6 @@ python src/evaluate_evalplus.py \
 
 echo ""
 
-# ---- Step 3: Verify output files ----
 echo "=== Step 3: Verify outputs ==="
 echo "HumanEval samples: $(wc -l < /tmp/test_evalplus/humaneval_santacoder.jsonl)"
 echo "MBPP samples: $(wc -l < /tmp/test_evalplus/mbpp_santacoder.jsonl)"

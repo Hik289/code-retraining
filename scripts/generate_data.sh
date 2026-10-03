@@ -1,7 +1,4 @@
 #!/bin/bash
-# Self-play 数据生成
-# 用法：sbatch scripts/generate_data.sh <model_path> <output_file> <num_samples> [seed]
-# 验证：sbatch scripts/generate_data.sh bigcode/santacoder selfplay_results/generated_data/test.jsonl 5 1
 
 #SBATCH --job-name=generate_data
 #SBATCH --gres=gpu:1
@@ -14,12 +11,10 @@
 
 set -euo pipefail
 
-# ---- 项目根目录 ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# ---- 环境 ----
 source "$PROJECT_DIR/venv/bin/activate"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"

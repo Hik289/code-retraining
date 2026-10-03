@@ -172,13 +172,6 @@ model,filter,round,steps_total,humaneval_pass1,humaneval_plus_pass1,mbpp_pass1,m
 ```bash
 python src/aggregate_results.py --output_dir results/summary/
 
-# 输出：
-# results/summary/
-#   all_results.csv          — 20 组 CSV 合并（~400 行 = 20 实验 × 20 轮）
-#   humaneval_by_model.png   — 4 条线（4 模型），x=round, y=humaneval_pass1, 按 filter 分面
-#   mbpp_by_model.png        — 同上
-#   collapse_speed.csv       — 每组实验降至 baseline 50% 的轮次
-#   filter_passrate.png      — 过滤通过率随轮次变化（观察 collapse 对生成质量的影响）
 ```
 
 #### 每轮 metadata JSON（可选）
@@ -224,39 +217,39 @@ python src/aggregate_results.py --output_dir results/summary/
 
 ```
 self-replay/
-├── docs/DESIGN.md             # 本文档
+├── docs/DESIGN.md
 │
-├── src/                       # ====== 所有 V2 新代码 ======
-│   ├── config.py              # 模型配置加载（YAML → dict）
-│   ├── fim.py                 # FIM 变换（多模型）
-│   ├── train.py               # 训练脚本（多模型 + 多版本 transformers）
-│   ├── generate.py            # 数据生成（The Stack prompt → model completion）
-│   ├── filters.py             # 所有过滤逻辑（compile / quality / ppl / binary）
-│   ├── evaluate_evalplus.py   # EvalPlus 代码生成 + 调用评估
-│   ├── evaluate_lcb.py        # LiveCodeBench 代码生成 + 评估
-│   ├── aggregate_results.py   # 汇总 20 组 results.csv + 生成对比图
-│   ├── run_experiment.sh      # SLURM 统一实验入口
-│   └── setup_venvs.sh         # 一键创建所有 venv
+├── src/
+│   ├── config.py
+│   ├── fim.py
+│   ├── train.py
+│   ├── generate.py
+│   ├── filters.py
+│   ├── evaluate_evalplus.py
+│   ├── evaluate_lcb.py
+│   ├── aggregate_results.py
+│   ├── run_experiment.sh
+│   └── setup_venvs.sh
 │
-├── configs/                   # 模型配置
+├── configs/
 │   ├── santacoder.yaml
 │   ├── starcoder2.yaml
 │   ├── qwen25.yaml
 │   └── codellama.yaml
 │
-├── venvs/                     # 隔离虚拟环境（per-model）
+├── venvs/
 │   ├── santacoder/
 │   ├── starcoder2/
 │   ├── qwen25/
 │   └── codellama/
 │
-├── results/                   # V2 实验结果（按 model × filter 组织）
+├── results/
 │   ├── santacoder/
 │   │   ├── no_filter/
-│   │   │   ├── generated_data/    # round1.jsonl, round2.jsonl, ...
-│   │   │   ├── round1/            # final_checkpoint/
+│   │   │   ├── generated_data/
+│   │   │   ├── round1/
 │   │   │   ├── round2/
-│   │   │   └── results.csv        # 评估指标汇总
+│   │   │   └── results.csv
 │   │   ├── compile_filter/
 │   │   ├── quality_filter/
 │   │   ├── ppl_filter/
@@ -268,13 +261,12 @@ self-replay/
 │   └── codellama/
 │       └── ...
 │
-├── evalplus_results/          # EvalPlus 生成文件（临时）
-├── livecodebench_results/     # LCB 生成+评估文件（临时）
+├── evalplus_results/
+├── livecodebench_results/
 │
-│   # ====== V1 旧代码（只读参考，不运行） ======
-├── train.py                   # V1 训练脚本
-├── fim.py                     # V1 FIM
-├── scripts/                   # V1 脚本
+├── train.py
+├── fim.py
+├── scripts/
 │   ├── generate_data.py
 │   ├── generate_data_filtered.py
 │   ├── score_perplexity.py
@@ -284,7 +276,7 @@ self-replay/
 │   ├── evalplus_generate.py
 │   ├── lcb_generate.py
 │   └── run_selfplay_*.sh
-└── selfplay_results/          # V1 实验结果（只读参考）
+└── selfplay_results/
 ```
 
 ### src/config.py — 模型配置系统
@@ -292,13 +284,12 @@ self-replay/
 加载 `configs/*.yaml`，提供统一接口：
 
 ```python
-# 用法
 from src.config import load_model_config
 
-cfg = load_model_config("santacoder")  # 读取 configs/santacoder.yaml
-print(cfg["model_id"])          # "bigcode/santacoder"
-print(cfg["fim_prefix"])        # "<fim-prefix>"
-print(cfg["trust_remote_code"]) # True
+cfg = load_model_config("santacoder")
+print(cfg["model_id"])
+print(cfg["fim_prefix"])
+print(cfg["trust_remote_code"])
 ```
 
 配置文件示例（`configs/santacoder.yaml`）：
@@ -310,17 +301,14 @@ params: "1.1B"
 max_context: 2048
 trust_remote_code: true
 
-# FIM tokens（直接写 token 字面量，config.py 转为 ID）
 fim_prefix: "<fim-prefix>"
 fim_middle: "<fim-middle>"
 fim_suffix: "<fim-suffix>"
 fim_pad: "<fim-pad>"
 
-# Binary classifier tokens
 binary_good_token: " good"
 binary_bad_token: " bad"
 
-# 评估停止序列
 stop_sequences_humaneval: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
 stop_sequences_mbpp: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
 ```
@@ -331,7 +319,6 @@ stop_sequences_mbpp: ["\nclass ", "\ndef ", "\n#", "\nif ", "\nprint"]
 
 ```python
 def get_fim_token_ids(tokenizer, config):
-    """根据配置获取 FIM token IDs。支持所有 4 个模型。"""
     prefix_id = tokenizer.convert_tokens_to_ids(config["fim_prefix"])
     middle_id = tokenizer.convert_tokens_to_ids(config["fim_middle"])
     suffix_id = tokenizer.convert_tokens_to_ids(config["fim_suffix"])
@@ -340,7 +327,6 @@ def get_fim_token_ids(tokenizer, config):
 
 def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
             pad_tok_id, fim_rate=0.5, fim_spm_rate=0.5):
-    """FIM 变换（PSM/SPM）。与旧版逻辑完全相同，model-agnostic。"""
     ...
 ```
 
@@ -352,7 +338,6 @@ def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
 - **模型加载**：通过 `--config` 参数读取 YAML，`trust_remote_code` 等从配置获取
 
 ```bash
-# 用法
 python src/train.py \
     --config configs/starcoder2.yaml \
     --local_data_path results/starcoder2/compile_filter/generated_data/round1.jsonl \
@@ -369,14 +354,12 @@ python src/train.py \
 2. **带过滤**：循环生成 + 在线过滤，直到过滤后达到目标数量
 
 ```bash
-# 无过滤，生成 5000 条
 python src/generate.py \
     --config configs/qwen25.yaml \
     --model_path Qwen/Qwen2.5-Coder-1.5B \
     --output_file results/qwen25/no_filter/generated_data/round1.jsonl \
     --num_samples 5000
 
-# 带 compile 过滤，循环直到 5000 条
 python src/generate.py \
     --config configs/qwen25.yaml \
     --model_path Qwen/Qwen2.5-Coder-1.5B \
@@ -384,7 +367,6 @@ python src/generate.py \
     --num_samples 5000 \
     --filter_mode compile
 
-# 为 PPL/Binary 过滤生成 20000 条原始数据
 python src/generate.py \
     --config configs/qwen25.yaml \
     --model_path Qwen/Qwen2.5-Coder-1.5B \
@@ -397,59 +379,50 @@ python src/generate.py \
 所有过滤功能整合在一个文件中，通过子命令调用：
 
 ```bash
-# compile 检查（纯 CPU）
 python src/filters.py compile \
     --input_file round1_raw.jsonl \
     --output_file round1.jsonl
 
-# compile + quality（纯 CPU）
 python src/filters.py quality \
     --input_file round1_raw.jsonl \
     --output_file round1.jsonl \
     --repetition_threshold 0.5 \
     --min_completion_tokens 50
 
-# PPL 打分（需 GPU）
 python src/filters.py score-ppl \
     --input_file round1_raw.jsonl \
     --output_file round1_scored.jsonl \
     --model_path results/starcoder2/ppl_filter/round0/final_checkpoint
 
-# PPL 过滤（纯 CPU）
 python src/filters.py filter-topk \
     --input_file round1_scored.jsonl \
     --output_file round1.jsonl \
     --score_field ppl \
     --top_percent 25 \
-    --ascending  # PPL 越低越好
+    --ascending
 
-# Binary 打分（需 GPU）
 python src/filters.py score-binary \
     --input_file round1_raw.jsonl \
     --output_file round1_scored.jsonl \
     --config configs/starcoder2.yaml \
     --model_path results/starcoder2/binary_filter/round0/final_checkpoint
 
-# Binary 过滤（纯 CPU）
 python src/filters.py filter-topk \
     --input_file round1_scored.jsonl \
     --output_file round1.jsonl \
     --score_field score \
     --top_percent 25
-    # 默认 descending：score 越高越好
 ```
 
 ### src/evaluate_evalplus.py & src/evaluate_lcb.py — 评估
 
 ```bash
-# EvalPlus
 python src/evaluate_evalplus.py \
     --config configs/starcoder2.yaml \
     --model_path results/starcoder2/compile_filter/round1/final_checkpoint \
     --dataset humaneval \
     --output_file evalplus_results/humaneval/sc2_compile_r1.jsonl
 
-# LiveCodeBench
 python src/evaluate_lcb.py \
     --config configs/starcoder2.yaml \
     --model_path results/starcoder2/compile_filter/round1/final_checkpoint \
@@ -459,20 +432,10 @@ python src/evaluate_lcb.py \
 ### src/run_experiment.sh — SLURM 统一入口
 
 ```bash
-# 用法
 sbatch src/run_experiment.sh santacoder compile
 sbatch src/run_experiment.sh starcoder2 ppl
 sbatch src/run_experiment.sh codellama none
 
-# 内部流程
-# 1. 读取 configs/${MODEL}.yaml
-# 2. 激活 venvs/${MODEL}/bin/activate
-# 3. for ROUND in 1..20:
-#      a. 数据生成（根据 filter 选择流程）
-#      b. python src/train.py --config ... --local_data_path ...
-#      c. python src/evaluate_evalplus.py ... (HumanEval + MBPP)
-#      d. python src/evaluate_lcb.py ...
-#      e. 追加结果到 results.csv
 ```
 
 ### 旧代码的角色

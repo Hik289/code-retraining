@@ -1,7 +1,4 @@
 #!/bin/bash
-# LiveCodeBench 评估（自定义 codegen，绕过 vLLM）
-# 用法：sbatch scripts/eval_livecodebench.sh <model_path> [release_version]
-# 默认 release_v1
 
 #SBATCH --job-name=eval_lcb
 #SBATCH --gres=gpu:1
@@ -14,12 +11,10 @@
 
 set -euo pipefail
 
-# ---- 项目根目录 ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# ---- 环境 ----
 source "$PROJECT_DIR/venv/bin/activate"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export WANDB_MODE=disabled

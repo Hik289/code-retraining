@@ -1,5 +1,4 @@
 #!/bin/bash
-# 调试：深入检查为什么 SantaCoder 立即输出 EOS
 #SBATCH --job-name=debug_comp2
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
@@ -37,7 +36,6 @@ print(f'bos_token: {repr(tokenizer.bos_token)} id={getattr(tokenizer, \"bos_toke
 print(f'vocab_size: {tokenizer.vocab_size}')
 print()
 
-# 检查 generate 的原始 token ids
 input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)
 print(f'Prompt length: {input_ids.shape[-1]} tokens')
 print(f'Last 5 prompt tokens: {input_ids[0, -5:].tolist()}')
@@ -53,7 +51,6 @@ print(f'Decoded (skip_special=False): {repr(tokenizer.decode(gen_ids, skip_speci
 print(f'Decoded (skip_special=True):  {repr(tokenizer.decode(gen_ids, skip_special_tokens=True))}')
 print()
 
-# 也试试 float16 而不是 bfloat16
 print('=== Trying float16 ===')
 del model
 torch.cuda.empty_cache()

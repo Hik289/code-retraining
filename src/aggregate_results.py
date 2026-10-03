@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Aggregate formal self-play results and render dataset-specific SVG plots."""
 
 from __future__ import annotations
 

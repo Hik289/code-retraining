@@ -1,19 +1,16 @@
-# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .ipynb_checkpoints/
 
-# Virtual environments (create locally; see README)
 venv/
 venvs/
 .venv/
 
-# Third-party benchmark (clone separately; see README)
 LiveCodeBench/
 
-# Experiment outputs
 results/
+selfplay_results/
 evalplus_results/
 livecodebench_results/
 generated_data/
@@ -24,18 +21,15 @@ generated_data/
 *.db
 wandb/
 
-# Model / data caches
 *.safetensors
 *.bin
 *.pt
 hf_cache/
 .cache/
 
-# OS / editor
 .DS_Store
 *.swp
 
-# Shared research-artifact hygiene
 .AppleDouble
 ._*
 .vscode/

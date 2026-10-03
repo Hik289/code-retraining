@@ -1,12 +1,3 @@
-"""train.py — SantaCoder 微调训练脚本
-
-支持三种数据源：
-  1. HuggingFace 数据集（The Stack 等），通过 --dataset_name 指定
-  2. 本地 JSONL 文件（self-play 生成数据），通过 --local_data_path 指定
-  3. 本地 Arrow 缓存（绕过 gated dataset 认证），通过 --local_arrow_path 指定
-
-要求 transformers==4.35.2 以保证与 SantaCoder 自定义模型代码的兼容性。
-"""
 import argparse
 import glob
 import os
@@ -28,16 +19,11 @@ from transformers import (
 import fim
 
 
-# ============================================================
-# 参数解析
-# ============================================================
 def get_args():
     parser = argparse.ArgumentParser()
 
-    # 模型
     parser.add_argument("--model_path", type=str, default="bigcode/santacoder")
 
-    # 数据集（三选一）
     parser.add_argument("--dataset_name", type=str, default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default=None,
                         help="数据集子目录，如 data/python")
@@ -47,7 +33,6 @@ def get_args():
     parser.add_argument("--local_arrow_path", type=str, default=None,
                         help="本地 Arrow 缓存目录。若设置，覆盖 --dataset_name")
 
-    # 训练
     parser.add_argument("--seq_length", type=int, default=2048)
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -59,34 +44,26 @@ def get_args():
     parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
 
-    # FIM
     parser.add_argument("--fim_rate", type=float, default=0.5)
     parser.add_argument("--fim_spm_rate", type=float, default=0.5)
 
-    # 数据加载
     parser.add_argument("--streaming", action="store_true")
     parser.add_argument("--size_valid_set", type=int, default=4000)
     parser.add_argument("--shuffle_buffer", type=int, default=5000)
     parser.add_argument("--num_workers", type=int, default=4)
 
-    # 输出与日志
     parser.add_argument("--output_dir", type=str, default="./checkpoints")
     parser.add_argument("--eval_freq", type=int, default=1000)
     parser.add_argument("--save_freq", type=int, default=1000)
     parser.add_argument("--log_freq", type=int, default=100)
 
-    # 梯度检查点（默认开启）
     parser.add_argument("--no_gradient_checkpointing", action="store_false",
                         dest="gradient_checkpointing")
 
     return parser.parse_args()
 
 
-# ============================================================
-# 工具函数
-# ============================================================
 def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
-    """采样估算字符/token 比率。"""
     total_characters, total_tokens = 0, 0
     for _, example in tqdm(zip(range(nb_examples), iter(dataset)), total=nb_examples):
         text = example[data_column]
@@ -95,16 +72,7 @@ def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
     return total_characters / total_tokens
 
 
-# ============================================================
-# ConstantLengthDataset — 定长序列数据集
-# ============================================================
 class ConstantLengthDataset(IterableDataset):
-    """将变长文本流打包成定长 token 序列。
-
-    流程：填充字符 buffer → 批量 tokenize → 可选 FIM 变换 →
-         用 EOS 拼接 → 切成 seq_length 定长序列 → 打乱。
-    labels = input_ids（CLM next-token prediction）。
-    """
 
     def __init__(self, tokenizer, dataset, infinite=False, seq_length=2048,
                  num_of_sequences=1024, chars_per_token=3.6,
@@ -125,7 +93,6 @@ class ConstantLengthDataset(IterableDataset):
 
         self.max_buffer_size = seq_length * chars_per_token * num_of_sequences
 
-        # FIM token IDs
         self.suffix_tok_id = None
         if fim_rate > 0:
             (self.suffix_tok_id, self.prefix_tok_id,
@@ -183,12 +150,8 @@ class ConstantLengthDataset(IterableDataset):
                 }
 
 
-# ============================================================
-# 数据集创建
-# ============================================================
 def create_datasets(tokenizer, args):
     if args.local_data_path:
-        # 本地 JSONL 文件
         dataset = load_dataset("json",
                                data_files={"train": args.local_data_path},
                                split="train")
@@ -196,7 +159,6 @@ def create_datasets(tokenizer, args):
         train_data = dataset["train"]
         valid_data = dataset["test"]
     elif args.local_arrow_path:
-        # 本地 Arrow 缓存（绕过 gated dataset 认证）
         data_files = sorted([
             f for f in glob.glob(os.path.join(args.local_arrow_path, "*.arrow"))
             if not os.path.basename(f).startswith("cache-")
@@ -236,9 +198,6 @@ def create_datasets(tokenizer, args):
     return train_dataset, valid_dataset
 
 
-# ============================================================
-# 训练
-# ============================================================
 def run_training(args):
     set_seed(args.seed)
 
@@ -282,7 +241,6 @@ def run_training(args):
     final_ckpt = os.path.join(args.output_dir, "final_checkpoint")
     trainer.save_model(final_ckpt)
     tokenizer.save_pretrained(final_ckpt)
-    # Training disables the KV cache; restore it for inference.
     from transformers import GenerationConfig
     gen_config = GenerationConfig.from_pretrained(final_ckpt)
     gen_config.use_cache = True

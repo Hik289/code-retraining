@@ -1,30 +1,3 @@
-"""Offline compile, quality, perplexity, and binary-score filters.
-
-Each filter is exposed as a subcommand:
-
-    # Compile check (CPU only)
-    python src/filters.py compile \
-        --input_file round1_raw.jsonl --output_file round1.jsonl
-
-    # Compile and static quality checks (CPU only)
-    python src/filters.py quality \
-        --input_file round1_raw.jsonl --output_file round1.jsonl
-
-    # Perplexity scoring (GPU)
-    python src/filters.py score-ppl \
-        --input_file round1_raw.jsonl --output_file round1_scored.jsonl \
-        --model_path bigcode/santacoder --config configs/santacoder.yaml
-
-    # Binary self-scoring (GPU)
-    python src/filters.py score-binary \
-        --input_file round1_raw.jsonl --output_file round1_scored.jsonl \
-        --model_path bigcode/santacoder --config configs/santacoder.yaml
-
-    # Top-K selection (CPU only)
-    python src/filters.py filter-topk \
-        --input_file round1_scored.jsonl --output_file round1.jsonl \
-        --score_field ppl --top_percent 25 --ascending
-"""
 import argparse
 import json
 import math
@@ -34,7 +7,6 @@ from collections import Counter
 import numpy as np
 
 
-# ===================== Shared Utilities =====================
 
 def load_jsonl(path):
     samples = []
@@ -53,7 +25,6 @@ def write_jsonl(samples, path):
             f.write(json.dumps(s) + "\n")
 
 
-# ===================== CPU Filters =====================
 
 def check_compile(code: str) -> bool:
     try:
@@ -80,7 +51,6 @@ def check_length(code: str, tokenizer, prompt_tokens: int,
     return completion_len >= min_completion_tokens
 
 
-# ===================== Subcommand: compile =====================
 
 def cmd_compile(args):
     samples = load_jsonl(args.input_file)
@@ -94,7 +64,6 @@ def cmd_compile(args):
     print(f"Output: {args.output_file}")
 
 
-# ===================== Subcommand: quality =====================
 
 def cmd_quality(args):
     from transformers import AutoTokenizer
@@ -135,7 +104,6 @@ def cmd_quality(args):
     print(f"Output: {args.output_file}")
 
 
-# ===================== Subcommand: score-ppl =====================
 
 def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device):
     import torch
@@ -150,7 +118,6 @@ def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device
 
     labels = input_ids.clone()
     labels[attention_mask == 0] = -100
-    # Mask prompt tokens; padding_side="left" so real tokens start from right
     for i in range(labels.size(0)):
         real_start = (attention_mask[i] == 0).sum().item()
         mask_end = min(real_start + prompt_tokens, labels.size(1))
@@ -233,7 +200,6 @@ def cmd_score_ppl(args):
     print(f"Output: {args.output_file}")
 
 
-# ===================== Subcommand: score-binary =====================
 
 BINARY_TEMPLATE = "\n# quality: "
 
@@ -293,7 +259,6 @@ def cmd_score_binary(args):
     model.eval()
     device = next(model.parameters()).device
 
-    # Resolve good/bad token IDs from config
     good_token = cfg.get("binary_good_token", " good")
     bad_token = cfg.get("binary_bad_token", " bad")
     good_ids = tokenizer.encode(good_token, add_special_tokens=False)
@@ -337,7 +302,6 @@ def cmd_score_binary(args):
     print(f"Output: {args.output_file}")
 
 
-# ===================== Subcommand: filter-topk =====================
 
 def cmd_filter_topk(args):
     if not 0 < args.top_percent <= 100:
@@ -355,7 +319,6 @@ def cmd_filter_topk(args):
     keep_count = max(1, int(len(valid) * args.top_percent / 100))
     kept = valid[:keep_count]
 
-    # Remove score field from output to keep clean training format
     out_samples = []
     for _, s in kept:
         out = {k: v for k, v in s.items() if k != field}
@@ -376,7 +339,6 @@ def cmd_filter_topk(args):
     print(f"Output: {args.output_file}")
 
 
-# ===================== CLI =====================
 
 def main():
     parser = argparse.ArgumentParser(
@@ -385,12 +347,10 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # ---- compile ----
     p = sub.add_parser("compile", help="Keep only samples that pass compile()")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
 
-    # ---- quality ----
     p = sub.add_parser("quality", help="compile + repetition + length check")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
@@ -401,7 +361,6 @@ def main():
     p.add_argument("--repetition_threshold", type=float, default=0.5)
     p.add_argument("--min_completion_tokens", type=int, default=50)
 
-    # ---- score-ppl ----
     p = sub.add_parser("score-ppl", help="Score samples by PPL (needs GPU)")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
@@ -412,7 +371,6 @@ def main():
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--max_length", type=int, default=2048)
 
-    # ---- score-binary ----
     p = sub.add_parser("score-binary", help="Score samples by binary classifier (needs GPU)")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
@@ -422,7 +380,6 @@ def main():
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--max_content_tokens", type=int, default=2000)
 
-    # ---- filter-topk ----
     p = sub.add_parser("filter-topk", help="Keep top K% by score field")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)

@@ -109,24 +109,19 @@ selfplay_r5,selfplay_results/round5/final_checkpoint,30000,,,,
 **版本选择原则：** SantaCoder 使用自定义模型代码（`modeling_gpt2_mq.py`），其 KV cache 实现与 `transformers>=4.36` 引入的 `DynamicCache` 不兼容。锁定 `transformers==4.35.2`（DynamicCache 之前的最后版本）可一次性规避所有兼容性问题，无需任何 workaround。
 
 ```bash
-# 创建项目目录
 mkdir selfplay-finetune && cd selfplay-finetune
 
-# 创建虚拟环境
 python3 -m venv venv
 source venv/bin/activate
 
-# ---- 核心依赖（版本锁定） ----
-pip install torch                          # 与 CUDA 版本匹配
-pip install transformers==4.35.2           # 锁定版本，避免 KV cache 不兼容
-pip install datasets>=2.14,<3.0            # 流式加载 + Arrow 支持
-pip install accelerate>=0.24,<1.0          # HF Trainer 分布式训练
-pip install wandb                          # 实验追踪（可禁用）
+pip install torch
+pip install transformers==4.35.2
+pip install datasets>=2.14,<3.0
+pip install accelerate>=0.24,<1.0
+pip install wandb
 
-# ---- 评估框架 ----
-pip install evalplus                       # EvalPlus (HumanEval+, MBPP+)
+pip install evalplus
 
-# LiveCodeBench
 git clone https://github.com/LiveCodeBench/LiveCodeBench.git
 cd LiveCodeBench && pip install -e . && cd ..
 ```
@@ -143,11 +138,8 @@ cd LiveCodeBench && pip install -e . && cd ..
 ### 3.3 关键环境变量
 
 ```bash
-# 禁用 W&B（必须用 WANDB_MODE，不要用 WANDB_DISABLED）
-# 原因：WANDB_DISABLED 已废弃，与 report_to='wandb' 同时存在时抛 RuntimeError
 export WANDB_MODE=disabled
 
-# 若 HuggingFace Hub 不可达（如内网服务器），强制离线模式
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 ```
@@ -155,17 +147,12 @@ export TRANSFORMERS_OFFLINE=1
 ### 3.4 下载模型和数据
 
 ```bash
-# 下载 SantaCoder 模型（约 4.5GB）
-# 首次 from_pretrained 时自动下载到 ~/.cache/huggingface/hub/
 python -c "
 from transformers import AutoModelForCausalLM, AutoTokenizer
 AutoTokenizer.from_pretrained('bigcode/santacoder', trust_remote_code=True)
 AutoModelForCausalLM.from_pretrained('bigcode/santacoder', trust_remote_code=True)
 "
 
-# The Stack 数据集（Python 子集）
-# 流式加载，不需要提前下载（推荐，数据集 TB 级别）
-# 若 Hub 不可达，需要本地 Arrow 缓存（见 §3.5）
 ```
 
 ### 3.5 离线环境：本地数据集缓存
@@ -190,15 +177,15 @@ files = sorted([f for f in glob.glob(os.path.join(path, "*.arrow"))
 
 ```
 selfplay-finetune/
-├── train.py                        # 核心训练脚本
-├── fim.py                          # FIM 数据增强（PSM/SPM）
+├── train.py
+├── fim.py
 ├── scripts/
-│   ├── generate_data.py            # 批量推理，生成 self-play 训练数据
-│   ├── run_selfplay_loop.sh        # 编排完整循环（生成→训练→评估）
-│   ├── eval_evalplus.sh            # EvalPlus 评估脚本
-│   ├── eval_livecodebench.sh       # LiveCodeBench 评估脚本
-│   └── run_thestack_baseline.sh    # The Stack baseline 训练脚本
-├── selfplay_results/               # self-play 实验输出
+│   ├── generate_data.py
+│   ├── run_selfplay_loop.sh
+│   ├── eval_evalplus.sh
+│   ├── eval_livecodebench.sh
+│   └── run_thestack_baseline.sh
+├── selfplay_results/
 │   ├── generated_data/
 │   │   ├── round1.jsonl
 │   │   └── ...
@@ -206,11 +193,11 @@ selfplay-finetune/
 │   ├── ...
 │   ├── results.csv
 │   └── logs/
-├── thestack_baseline/              # The Stack baseline 输出
+├── thestack_baseline/
 │   └── final_checkpoint/
-├── evalplus_results/               # EvalPlus 评估结果
-├── livecodebench_results/          # LiveCodeBench 评估结果
-└── LiveCodeBench/                  # 克隆的 LiveCodeBench 仓库
+├── evalplus_results/
+├── livecodebench_results/
+└── LiveCodeBench/
 ```
 
 ---
@@ -222,25 +209,12 @@ selfplay-finetune/
 FIM（Fill-In-The-Middle）使模型能根据前后文预测中间缺失的代码。SantaCoder 预训练时使用了 FIM，其 tokenizer 内置了 FIM 特殊 token。Self-play 和 baseline 均使用 `fim_rate=0.5`。
 
 ```python
-"""fim.py — Fill-In-The-Middle 数据增强
-
-实现 FIM 论文 (Bavarian et al., 2022) 中的 PSM 和 SPM 两种变体。
-FIM 变换在训练时对已 tokenize 的序列随机切割重排，使模型学会根据前后文预测中间内容。
-
-PSM (Prefix-Suffix-Middle): <PRE> prefix <SUF> suffix <MID> middle
-SPM (Suffix-Prefix-Middle): <PRE> <SUF> suffix <MID> prefix middle
-"""
 import functools
 import numpy as np
 
 
 @functools.lru_cache(maxsize=None)
 def get_fim_token_ids(tokenizer):
-    """从 SantaCoder tokenizer 的 additional_special_tokens 中提取 FIM token IDs。
-
-    SantaCoder 的 additional_special_tokens 按固定顺序存储 5 个 token，
-    第 2-5 个依次为 FIM_PREFIX, FIM_MIDDLE, FIM_SUFFIX, FIM_PAD。
-    """
     try:
         _, FIM_PREFIX, FIM_MIDDLE, FIM_SUFFIX, FIM_PAD = (
             tokenizer.special_tokens_map["additional_special_tokens"]
@@ -258,19 +232,6 @@ def get_fim_token_ids(tokenizer):
 
 def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
             pad_tok_id, fim_rate, fim_spm_rate):
-    """对 token 序列做 FIM 变换。
-
-    以 fim_rate 概率触发变换；触发后以 fim_spm_rate 概率选择 SPM 或 PSM 格式。
-
-    Args:
-        sample: numpy array of token IDs
-        np_rng: numpy RandomState
-        fim_rate: 触发 FIM 变换的概率 (0.5 = 一半样本做 FIM)
-        fim_spm_rate: FIM 变换中选择 SPM 格式的概率 (0.5 = SPM/PSM 各半)
-
-    Returns:
-        (new_sample, np_rng)
-    """
     if np_rng.binomial(1, fim_rate):
         boundaries = list(np_rng.randint(low=0, high=len(sample) + 1, size=2))
         boundaries.sort()
@@ -280,13 +241,11 @@ def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
         suffix = sample[boundaries[1] :]
 
         if np_rng.binomial(1, fim_spm_rate):
-            # SPM: <PRE> <SUF> suffix <MID> prefix middle
             new_sample = np.concatenate(
                 [[prefix_tok_id, suffix_tok_id], suffix,
                  [middle_tok_id], prefix, middle]
             )
         else:
-            # PSM: <PRE> prefix <SUF> suffix <MID> middle
             new_sample = np.concatenate(
                 [[prefix_tok_id], prefix, [suffix_tok_id],
                  suffix, [middle_tok_id], middle]
@@ -303,14 +262,6 @@ def permute(sample, np_rng, suffix_tok_id, prefix_tok_id, middle_tok_id,
 **功能：** 从 HuggingFace Hub 或本地 JSONL 加载数据 → `ConstantLengthDataset` 打包为定长 2048-token 序列 → FIM 数据增强 → HuggingFace Trainer CLM 训练。
 
 ```python
-"""train.py — SantaCoder 微调训练脚本
-
-支持两种数据源：
-  1. HuggingFace 数据集（The Stack 等），通过 --dataset_name 指定
-  2. 本地 JSONL 文件（self-play 生成数据），通过 --local_data_path 指定
-
-要求 transformers==4.35.2 以保证与 SantaCoder 自定义模型代码的兼容性。
-"""
 import argparse
 import os
 
@@ -330,16 +281,11 @@ from transformers import (
 import fim
 
 
-# ============================================================
-# 参数解析
-# ============================================================
 def get_args():
     parser = argparse.ArgumentParser()
 
-    # 模型
     parser.add_argument("--model_path", type=str, default="bigcode/santacoder")
 
-    # 数据集（二选一）
     parser.add_argument("--dataset_name", type=str, default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default=None,
                         help="数据集子目录，如 data/python")
@@ -347,7 +293,6 @@ def get_args():
     parser.add_argument("--local_data_path", type=str, default=None,
                         help="本地 JSONL 文件路径。若设置，覆盖 --dataset_name")
 
-    # 训练
     parser.add_argument("--seq_length", type=int, default=2048)
     parser.add_argument("--max_steps", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -359,34 +304,26 @@ def get_args():
     parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
 
-    # FIM（SantaCoder 预训练使用了 FIM，微调时也应开启）
     parser.add_argument("--fim_rate", type=float, default=0.5)
     parser.add_argument("--fim_spm_rate", type=float, default=0.5)
 
-    # 数据加载
     parser.add_argument("--streaming", action="store_true")
     parser.add_argument("--size_valid_set", type=int, default=4000)
     parser.add_argument("--shuffle_buffer", type=int, default=5000)
     parser.add_argument("--num_workers", type=int, default=4)
 
-    # 输出与日志
     parser.add_argument("--output_dir", type=str, default="./checkpoints")
     parser.add_argument("--eval_freq", type=int, default=1000)
     parser.add_argument("--save_freq", type=int, default=1000)
     parser.add_argument("--log_freq", type=int, default=100)
 
-    # 梯度检查点（默认开启以节省显存）
     parser.add_argument("--no_gradient_checkpointing", action="store_false",
                         dest="gradient_checkpointing")
 
     return parser.parse_args()
 
 
-# ============================================================
-# 工具函数
-# ============================================================
 def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
-    """采样 400 条估算字符/token 比率（SantaCoder Python 约 3~4）。"""
     total_characters, total_tokens = 0, 0
     for _, example in tqdm(zip(range(nb_examples), iter(dataset)), total=nb_examples):
         text = example[data_column]
@@ -395,16 +332,7 @@ def chars_token_ratio(dataset, tokenizer, data_column, nb_examples=400):
     return total_characters / total_tokens
 
 
-# ============================================================
-# ConstantLengthDataset — 定长序列数据集
-# ============================================================
 class ConstantLengthDataset(IterableDataset):
-    """将变长文本流打包成定长 token 序列。
-
-    流程：填充字符 buffer → 批量 tokenize → 可选 FIM 变换 →
-         用 EOS 拼接 → 切成 seq_length 定长序列 → 打乱。
-    labels = input_ids（CLM next-token prediction）。
-    """
 
     def __init__(self, tokenizer, dataset, seq_length=2048,
                  num_of_sequences=1024, chars_per_token=3.6,
@@ -424,7 +352,6 @@ class ConstantLengthDataset(IterableDataset):
 
         self.max_buffer_size = seq_length * chars_per_token * num_of_sequences
 
-        # FIM token IDs
         self.suffix_tok_id = None
         if fim_rate > 0:
             (self.suffix_tok_id, self.prefix_tok_id,
@@ -479,9 +406,6 @@ class ConstantLengthDataset(IterableDataset):
                 }
 
 
-# ============================================================
-# 数据集创建
-# ============================================================
 def create_datasets(tokenizer, args):
     if args.local_data_path:
         dataset = load_dataset("json",
@@ -514,14 +438,11 @@ def create_datasets(tokenizer, args):
     valid_dataset = ConstantLengthDataset(
         tokenizer, valid_data, seq_length=args.seq_length,
         content_field=args.data_column, chars_per_token=chars_per_token,
-        fim_rate=0, seed=args.seed,  # 验证集不做 FIM
+        fim_rate=0, seed=args.seed,
     )
     return train_dataset, valid_dataset
 
 
-# ============================================================
-# 训练
-# ============================================================
 def run_training(args):
     set_seed(args.seed)
 
@@ -586,16 +507,6 @@ if __name__ == "__main__":
 因锁定 `transformers==4.35.2`，KV cache 正常工作，推理速度有保障。
 
 ```python
-"""scripts/generate_data.py — Self-play 数据生成脚本
-
-用法：
-    python scripts/generate_data.py \
-        --model_path bigcode/santacoder \
-        --output_file selfplay_results/generated_data/round1.jsonl \
-        --num_samples 5000 --seed 1
-
-要求 transformers==4.35.2。
-"""
 import argparse
 import json
 import os
@@ -612,14 +523,12 @@ def parse_args():
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--output_file", type=str, required=True)
 
-    # 数据源（二选一）
     parser.add_argument("--dataset_name", type=str,
                         default="bigcode/the-stack-dedup")
     parser.add_argument("--data_dir", type=str, default="data/python")
     parser.add_argument("--local_dataset_path", type=str, default=None,
                         help="本地 Arrow 缓存目录（HF Hub 不可达时使用）")
 
-    # 生成参数
     parser.add_argument("--num_samples", type=int, default=5000)
     parser.add_argument("--prompt_tokens", type=int, default=1024)
     parser.add_argument("--max_new_tokens", type=int, default=1024)
@@ -629,7 +538,6 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top_p", type=float, default=0.95)
 
-    # 采样
     parser.add_argument("--shuffle_buffer", type=int, default=50000)
     parser.add_argument("--seed", type=int, default=1,
                         help="每轮传不同 seed，实现近似随机采样")
@@ -637,9 +545,7 @@ def parse_args():
 
 
 def load_dataset_iter(args):
-    """加载数据集，返回流式迭代器。"""
     if args.local_dataset_path:
-        # 本地 Arrow 缓存：过滤掉 cache-*.arrow 索引文件（schema 不兼容）
         data_files = sorted([
             f for f in glob.glob(os.path.join(args.local_dataset_path, "*.arrow"))
             if not os.path.basename(f).startswith("cache-")
@@ -662,14 +568,12 @@ def main():
     args = parse_args()
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    # ---- Tokenizer ----
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path, trust_remote_code=True
     )
-    tokenizer.pad_token = tokenizer.eos_token   # SantaCoder 无 pad_token
-    tokenizer.padding_side = "left"             # causal LM 生成要求左侧 padding
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
-    # ---- Model ----
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         trust_remote_code=True,
@@ -679,10 +583,8 @@ def main():
     model.eval()
     device = next(model.parameters()).device
 
-    # ---- 数据 ----
     data_iter = load_dataset_iter(args)
 
-    # ---- 批量推理 ----
     count = 0
     batch_prompts = []
 
@@ -718,7 +620,6 @@ def main():
                     do_sample=True,
                     temperature=args.temperature,
                     top_p=args.top_p,
-                    # transformers==4.35.2 下 KV cache 正常工作，无需 use_cache=False
                 )
 
             for seq in outputs:
@@ -745,7 +646,7 @@ if __name__ == "__main__":
 SantaCoder tokenizer 没有 `pad_token`，batch 推理前必须设置：
 ```python
 tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "left"   # causal LM 生成要求左侧 padding
+tokenizer.padding_side = "left"
 ```
 
 ---
@@ -754,9 +655,6 @@ tokenizer.padding_side = "left"   # causal LM 生成要求左侧 padding
 
 ```bash
 #!/bin/bash
-# EvalPlus 评估（HumanEval+ 和 MBPP+）
-# 用法：sbatch scripts/eval_evalplus.sh <model_path> [humaneval|mbpp]
-# 默认同时评估 humaneval 和 mbpp
 
 #SBATCH --job-name=eval_evalplus
 #SBATCH --gres=gpu:1
@@ -793,9 +691,6 @@ done
 
 ```bash
 #!/bin/bash
-# LiveCodeBench 评估
-# 用法：sbatch scripts/eval_livecodebench.sh <model_path> [scenario] [version]
-# 默认 codegeneration, release_latest
 
 #SBATCH --job-name=eval_lcb
 #SBATCH --gres=gpu:1
@@ -827,7 +722,6 @@ echo "===== 完成 ====="
 
 ```bash
 #!/bin/bash
-# The Stack baseline（30K 步，Python，FIM 0.5）— self-play 的参照上限
 
 #SBATCH --job-name=thestack_baseline
 #SBATCH --gres=gpu:1
@@ -868,8 +762,6 @@ bash scripts/eval_livecodebench.sh thestack_baseline/final_checkpoint codegenera
 
 ```bash
 #!/bin/bash
-# Self-Play 循环：Round 0 评估 → 5 轮（生成→训练→评估）
-# 用法：sbatch scripts/run_selfplay_loop.sh
 
 #SBATCH --job-name=selfplay_loop
 #SBATCH --gres=gpu:1
@@ -878,17 +770,13 @@ bash scripts/eval_livecodebench.sh thestack_baseline/final_checkpoint codegenera
 
 set -euo pipefail
 
-# ---- 配置 ----
 MODEL_PATH="bigcode/santacoder"
 TOTAL_ROUNDS=5
 STEPS_PER_ROUND=6000
 NUM_SAMPLES=5000
 SHUFFLE_BUFFER=50000
 
-# 若 HF Hub 不可达，取消注释并填写本地缓存路径
-# LOCAL_DATASET_PATH="$HOME/.cache/huggingface/datasets/bigcode___the-stack-dedup/data.python/..."
 
-# ---- 初始化 ----
 mkdir -p selfplay_results/generated_data selfplay_results/logs
 
 CSV="selfplay_results/results.csv"
@@ -896,13 +784,11 @@ if [ ! -f "$CSV" ]; then
     echo "round,model_path,steps_total,humaneval_plus_pass1,mbpp_plus_pass1,livecodebench_pass1,timestamp" > "$CSV"
 fi
 
-# ---- Round 0：评估原始模型 ----
 echo "========== Round 0: 评估原始 SantaCoder =========="
 bash scripts/eval_evalplus.sh "$MODEL_PATH"
 bash scripts/eval_livecodebench.sh "$MODEL_PATH" codegeneration release_latest
 echo "0,$MODEL_PATH,0,,,,$(date -Iseconds)" >> "$CSV"
 
-# ---- Self-Play 循环 ----
 for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     PREV_ROUND=$((ROUND - 1))
 
@@ -916,7 +802,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
 
     echo "========== Round $ROUND / $TOTAL_ROUNDS =========="
 
-    # Step 1: 生成数据
     echo "--- Step 1: 生成数据 ---"
     GEN_CMD="python scripts/generate_data.py \
         --model_path $CURRENT_MODEL \
@@ -933,7 +818,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     LINES=$(wc -l < "selfplay_results/generated_data/round${ROUND}.jsonl")
     echo "生成了 $LINES 条样本"
 
-    # Step 2: 训练（FIM 开启，与 baseline 一致）
     echo "--- Step 2: 训练 ---"
     WANDB_MODE=disabled torchrun --nproc_per_node 1 --standalone train.py \
         --local_data_path "selfplay_results/generated_data/round${ROUND}.jsonl" \
@@ -954,13 +838,11 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
         --save_freq $STEPS_PER_ROUND \
         --log_freq 100
 
-    # Step 3: 评估（EvalPlus + LiveCodeBench）
     echo "--- Step 3: 评估 ---"
     CKPT="selfplay_results/round${ROUND}/final_checkpoint"
     bash scripts/eval_evalplus.sh "$CKPT"
     bash scripts/eval_livecodebench.sh "$CKPT" codegeneration release_latest
 
-    # Step 4: 记录
     STEPS_TOTAL=$((ROUND * STEPS_PER_ROUND))
     echo "selfplay_r${ROUND},$CKPT,$STEPS_TOTAL,,,,$(date -Iseconds)" >> "$CSV"
 
@@ -986,8 +868,8 @@ python scripts/generate_data.py \
     --output_file /tmp/test_gen.jsonl \
     --num_samples 5 --batch_size 1
 
-wc -l /tmp/test_gen.jsonl                                                    # 应为 5
-python -c "import json; [json.loads(l) for l in open('/tmp/test_gen.jsonl')]" # 无报错
+wc -l /tmp/test_gen.jsonl
+python -c "import json; [json.loads(l) for l in open('/tmp/test_gen.jsonl')]"
 ```
 
 **通过标准：** 5 条 JSONL，每条 `content` 1000–10000 字符。
@@ -1004,7 +886,7 @@ WANDB_MODE=disabled torchrun --nproc_per_node 1 --standalone train.py \
     --output_dir /tmp/test_ckpt \
     --eval_freq 25 --save_freq 50 --log_freq 5
 
-ls /tmp/test_ckpt/final_checkpoint/   # 应存在 config.json, model.safetensors 等
+ls /tmp/test_ckpt/final_checkpoint/
 ```
 
 **通过标准：** 50 步完成，loss 下降，`final_checkpoint/` 存在。

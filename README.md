@@ -63,20 +63,18 @@ experiments and evaluate each round on HumanEval(+), MBPP(+), and LiveCodeBench.
 | **Loop** | 5 cumulative rounds x 3000 steps, continuing from the previous round checkpoint |
 | **Evaluation** | [EvalPlus](https://github.com/evalplus/evalplus) (HumanEval+, MBPP+) and [LiveCodeBench](https://github.com/LiveCodeBench/LiveCodeBench), per round |
 
-### Recursive self-training loop
+### Recursive self-training and review
 
 Without review, generated data is fed straight back into training. Errors and
 low-diversity samples accumulate across rounds, driving model collapse.
-
-![Ungated self-training loop](assets/ungated_self_training_loop.jpg)
-
-### Gated review pipeline
 
 The gated variants insert a review filter between generation and training. Only
 samples that pass the gate are used to retrain the model, letting us ablate
 human-gate and AI-self-gate review strategies.
 
-![Gated retraining pipeline](assets/gated_retraining_pipeline.jpg)
+![Recursive training under different review policies](assets/review_coupling_imagegen.png)
+
+[High-resolution figure (PDF)](assets/review_coupling_imagegen.pdf)
 
 ### Filters
 
@@ -96,30 +94,30 @@ human-gate and AI-self-gate review strategies.
 code-retraining/
 ├── README.md
 ├── LICENSE
-├── requirements.txt              # general env (StarCoder2 / Qwen2.5 / CodeLlama)
-├── requirements-santacoder.txt   # pinned env (transformers==4.35.2)
-├── assets/                       # figures used in this README
-├── configs/                      # one YAML per model (HF id, FIM tokens, stop sequences)
+├── requirements.txt
+├── requirements-santacoder.txt
+├── assets/
+├── configs/
 │   ├── santacoder.yaml
 │   ├── starcoder2.yaml
 │   ├── qwen25.yaml
 │   └── codellama.yaml
-├── src/                          # main (V2) pipeline — all current experiments
-│   ├── config.py                 # load model config (YAML → dict)
-│   ├── fim.py                    # Fill-in-the-Middle transform (per-model tokens)
-│   ├── generate.py               # self-play data generation (+ inline compile/quality filters)
-│   ├── filters.py                # ppl / binary scoring and top-k filtering
-│   ├── train.py                  # training (ConstantLengthDataset, multi-version transformers)
-│   ├── evaluate_evalplus.py      # HumanEval(+) / MBPP(+) generation + scoring
-│   ├── evaluate_lcb.py           # LiveCodeBench generation + scoring
-│   ├── aggregate_results.py      # merge all CSVs → summary tables + figures
-│   ├── status_experiments.py     # progress dashboard across the 4×5 grid
-│   ├── run_experiment.sh         # single SLURM entry point for one (model, filter) run
-│   └── *.sh                      # smoke tests, probes, batch submitters
-├── scripts/                      # earlier (V1) single-model helper scripts, kept for reference
+├── src/
+│   ├── config.py
+│   ├── fim.py
+│   ├── generate.py
+│   ├── filters.py
+│   ├── train.py
+│   ├── evaluate_evalplus.py
+│   ├── evaluate_lcb.py
+│   ├── aggregate_results.py
+│   ├── status_experiments.py
+│   ├── run_experiment.sh
+│   └── *.sh
+├── scripts/
 └── docs/
-    ├── DESIGN.md                 # full experimental design
-    └── PROJECT_SPEC.md           # build-from-scratch specification
+    ├── DESIGN.md
+    └── PROJECT_SPEC.md
 ```
 
 > `train.py` and `fim.py` at the repository root are the original V1
@@ -140,13 +138,11 @@ models share a general environment.
 git clone git@github.com:Hik289/code-retraining.git
 cd code-retraining
 
-# General environment — StarCoder2 / Qwen2.5 / CodeLlama
 python3 -m venv venvs/general
 source venvs/general/bin/activate
 pip install -r requirements.txt
 deactivate
 
-# SantaCoder environment (pinned transformers)
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements-santacoder.txt
@@ -163,7 +159,6 @@ repository root:
 
 ```bash
 git clone https://github.com/LiveCodeBench/LiveCodeBench.git LiveCodeBench
-# install its dependencies into the general env per the LiveCodeBench README
 ```
 
 ### 3. Configure environment variables
@@ -172,11 +167,10 @@ The scripts read everything sensitive/host-specific from the environment, with
 sensible fallbacks. Set what applies to your machine:
 
 ```bash
-export HF_TOKEN=hf_xxx                       # your Hugging Face token (for gated/large models)
-export HF_HOME=$HOME/.cache/huggingface      # HF cache (default: $HOME/.cache/huggingface)
-export THE_STACK_ARROW_CACHE=/path/to/the-stack-arrow-cache   # optional: local Arrow cache
+export HF_TOKEN=hf_xxx
+export HF_HOME=$HOME/.cache/huggingface
+export THE_STACK_ARROW_CACHE=/path/to/the-stack-arrow-cache
 
-# Required so `python src/*.py` can import the `src` package:
 export PYTHONPATH=$(pwd):$PYTHONPATH
 ```
 
@@ -190,11 +184,9 @@ The Stack from the Hub (or pass `--local_dataset_path`).
 Run a single (model, filter) experiment for 5 cumulative rounds:
 
 ```bash
-# Locally (no SLURM):
 bash src/run_experiment.sh santacoder none
 bash src/run_experiment.sh qwen25 ppl --rounds 5 --max-steps 3000
 
-# On a SLURM cluster:
 sbatch src/run_experiment.sh codellama compile
 ```
 
@@ -226,18 +218,15 @@ checkpoints/CSV rows. Key options (see `bash src/run_experiment.sh --help`):
 ## Reproducing the full grid
 
 ```bash
-# 4 models × 5 filters = 20 runs
 for model in santacoder starcoder2 qwen25 codellama; do
   for filter in none compile quality ppl binary; do
     sbatch src/run_experiment.sh "$model" "$filter"
   done
 done
 
-# Check progress across the grid at any time
 python src/status_experiments.py
 
-# Aggregate everything into summary tables + figures
-python src/aggregate_results.py            # → results/summary/{all_results.csv, *.csv, *.png}
+python src/aggregate_results.py
 ```
 
 Per-model defaults (generation/training batch size, gradient accumulation,

@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# ---- Environment ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
@@ -27,7 +26,6 @@ echo "=== GPU info ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo ""
 
-# ---- Step 1: Generate small training data ----
 echo "=== Step 1: Generate 20 training samples ==="
 python src/generate.py \
     --config configs/santacoder.yaml \
@@ -40,7 +38,6 @@ python src/generate.py \
 echo "Generated: $(wc -l < /tmp/test_train_data.jsonl) lines"
 echo ""
 
-# ---- Step 2: Train for 50 steps ----
 echo "=== Step 2: Train 50 steps ==="
 python src/train.py \
     --config configs/santacoder.yaml \
@@ -56,14 +53,12 @@ python src/train.py \
     --seed 42
 echo ""
 
-# ---- Step 3: Verify checkpoint ----
 echo "=== Step 3: Verify checkpoint ==="
 CKPT="/tmp/test_train_output/final_checkpoint"
 if [ -d "$CKPT" ]; then
     echo "Checkpoint exists: $CKPT"
     ls "$CKPT"/*.json "$CKPT"/*.bin 2>/dev/null || ls "$CKPT"/*.json "$CKPT"/*.safetensors 2>/dev/null || echo "  (listing files)"
     ls -lh "$CKPT/" | head -10
-    # Verify generation_config has use_cache=true
     python -c "import json; gc=json.load(open('$CKPT/generation_config.json')); print(f'  use_cache={gc.get(\"use_cache\", \"MISSING\")}')"
 else
     echo "ERROR: Checkpoint not found!"

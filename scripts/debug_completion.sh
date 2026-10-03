@@ -1,6 +1,4 @@
 #!/bin/bash
-# 调试：检查 SantaCoder 在 HumanEval 上的原始生成输出
-# 用法：sbatch scripts/debug_completion.sh
 
 #SBATCH --job-name=debug_completion
 #SBATCH --gres=gpu:1
@@ -42,7 +40,6 @@ def truncate_at_stop(text, stop_sequences):
             min_idx = idx
     return text[:min_idx]
 
-# 测试前 5 个 task
 for i, (task_id, task) in enumerate(tasks.items()):
     if i >= 5:
         break

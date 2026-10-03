@@ -11,12 +11,10 @@
 
 set -euo pipefail
 
-# ---- Project root ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# ---- Environment ----
 source "$PROJECT_DIR/venv/bin/activate"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -24,17 +22,15 @@ export WANDB_MODE=disabled
 export HF_TOKEN="${HF_TOKEN:-}"
 export HUGGING_FACE_HUB_TOKEN="${HF_TOKEN:-}"
 
-# ---- Config ----
 BASE_MODEL="bigcode/santacoder"
 TOTAL_ROUNDS=20
 STEPS_PER_ROUND=3000
-BATCH_GEN=2000           # samples generated per inner loop iteration
-TARGET_SAMPLES=5000      # accumulate this many passing samples per round
-SCORE_THRESHOLD=0.0      # keep samples with score > threshold
+BATCH_GEN=2000
+TARGET_SAMPLES=5000
+SCORE_THRESHOLD=0.0
 ARROW_CACHE="${THE_STACK_ARROW_CACHE:-}"
 EXP_DIR="selfplay_results/binary_filter"
 
-# ---- Init ----
 mkdir -p "$EXP_DIR/generated_data" selfplay_results/logs
 
 CSV="$EXP_DIR/results.csv"
@@ -42,7 +38,6 @@ if [ ! -f "$CSV" ]; then
     echo "round,model_path,steps_total,humaneval_pass1,humaneval_plus_pass1,mbpp_pass1,mbpp_plus_pass1,livecodebench_pass1,timestamp" > "$CSV"
 fi
 
-# ---- Self-Play loop ----
 for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     PREV_ROUND=$((ROUND - 1))
 
@@ -59,12 +54,10 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     echo "========== [Exp D: Binary Filter] Round $ROUND / $TOTAL_ROUNDS (total $STEPS_TOTAL steps) =========="
     echo "Model: $CURRENT_MODEL"
 
-    # ---- Step 1: Generate + score + filter until TARGET_SAMPLES reached ----
     DATA_FILE="$EXP_DIR/generated_data/round${ROUND}.jsonl"
     if [ -f "$DATA_FILE" ] && [ "$(wc -l < "$DATA_FILE")" -ge "$TARGET_SAMPLES" ]; then
         echo "--- Step 1: Skip (already have $(wc -l < "$DATA_FILE") samples) ---"
     else
-        # Start fresh accumulation file
         > "$DATA_FILE"
         BATCH_IDX=0
 
@@ -81,7 +74,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
             SCORED_FILE="$EXP_DIR/generated_data/round${ROUND}_batch${BATCH_IDX}_scored.jsonl"
             FILTERED_FILE="$EXP_DIR/generated_data/round${ROUND}_batch${BATCH_IDX}_filtered.jsonl"
 
-            # Step 1a: Generate
             echo "  1a: Generate $BATCH_GEN samples (seed=$SEED)"
             python scripts/generate_data.py \
                 --model_path "$CURRENT_MODEL" \
@@ -95,7 +87,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
                 --temperature 0.8 \
                 --top_p 0.95
 
-            # Step 1b: Score with binary classifier
             echo "  1b: Score with binary classifier"
             python scripts/score_binary_classifier.py \
                 --input_file "$RAW_FILE" \
@@ -103,25 +94,21 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
                 --model_path "$CURRENT_MODEL" \
                 --batch_size 64
 
-            # Step 1c: Filter (keep score > threshold)
             echo "  1c: Filter (score > $SCORE_THRESHOLD)"
             python scripts/filter_binary_classifier.py \
                 --input_file "$SCORED_FILE" \
                 --output_file "$FILTERED_FILE" \
                 --threshold "$SCORE_THRESHOLD"
 
-            # Append to accumulation file
             cat "$FILTERED_FILE" >> "$DATA_FILE"
             NEW_COUNT=$(wc -l < "$DATA_FILE")
             echo "  Accumulated: $NEW_COUNT samples"
 
-            # Clean up batch intermediates to save disk
             rm -f "$RAW_FILE" "$SCORED_FILE" "$FILTERED_FILE"
 
             BATCH_IDX=$((BATCH_IDX + 1))
         done
 
-        # Trim to exactly TARGET_SAMPLES
         head -n "$TARGET_SAMPLES" "$DATA_FILE" > "${DATA_FILE}.tmp" && mv "${DATA_FILE}.tmp" "$DATA_FILE"
         echo "Final dataset: $(wc -l < "$DATA_FILE") samples -> $DATA_FILE"
     fi
@@ -129,7 +116,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     LINES=$(wc -l < "$DATA_FILE")
     echo "Data: $LINES samples (binary classifier filtered)"
 
-    # ---- Step 2: Train ----
     CKPT="$EXP_DIR/round${ROUND}/final_checkpoint"
     if [ -d "$CKPT" ] && [ -f "$CKPT/model.safetensors" ]; then
         echo "--- Step 2: Skip (checkpoint already exists) ---"
@@ -161,10 +147,8 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
         exit 1
     fi
 
-    # ---- Step 3: Evaluate ----
     echo "--- Step 3: Evaluate ---"
 
-    # EvalPlus
     echo "--- 3a: EvalPlus ---"
     mkdir -p evalplus_results/humaneval evalplus_results/mbpp
 
@@ -198,7 +182,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     MBPP_PLUS=$(echo "$EVAL_OUT" | grep -A0 'pass@1' | tail -1 | awk '{print $NF}')
     echo "MBPP pass@1: $MBPP_BASE | MBPP+ pass@1: $MBPP_PLUS"
 
-    # LiveCodeBench
     echo "--- 3b: LiveCodeBench ---"
     python scripts/lcb_generate.py \
         --model_path "$CKPT" \
@@ -220,7 +203,6 @@ for ROUND in $(seq 1 $TOTAL_ROUNDS); do
     fi
     echo "LiveCodeBench pass@1: $LCB_PASS1"
 
-    # ---- Step 4: Record results ----
     echo "binary_r${ROUND},$CKPT,$STEPS_TOTAL,$HE_BASE,$HE_PLUS,$MBPP_BASE,$MBPP_PLUS,$LCB_PASS1,$(date -Iseconds)" >> "$CSV"
     echo ""
     echo "Round $ROUND results: HE=$HE_BASE HE+=$HE_PLUS MBPP=$MBPP_BASE MBPP+=$MBPP_PLUS LCB=$LCB_PASS1"
