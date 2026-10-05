@@ -14,6 +14,7 @@ usage() {
     cat <<'EOF'
 Usage:
   sbatch src/run_experiment.sh MODEL FILTER [options]
+  bash src/run_experiment.sh experiments --suite NAME --prompt_pool FILE [--execute]
 
 MODEL:
   santacoder | starcoder2 | qwen25 | codellama
@@ -43,6 +44,14 @@ Options:
   --skip-eval                Skip EvalPlus and LiveCodeBench
 EOF
 }
+
+if [ "${1:-}" = "experiments" ]; then
+    shift
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+    cd "$PROJECT_DIR"
+    exec "${RETRAIN_PYTHON:-python}" -m src.train experiments "$@"
+fi
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     usage

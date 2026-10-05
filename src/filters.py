@@ -1,11 +1,14 @@
 import argparse
+import hashlib
 import json
 import math
 import os
+import random
+import subprocess
+import uuid
 from collections import Counter
-
-import numpy as np
-
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 
 def load_jsonl(path):
@@ -19,11 +22,13 @@ def load_jsonl(path):
 
 
 def write_jsonl(samples, path):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w") as f:
-        for s in samples:
-            f.write(json.dumps(s) + "\n")
-
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as stream:
+        for row in samples:
+            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+    temporary.replace(path)
 
 
 def check_compile(code: str) -> bool:
@@ -51,7 +56,6 @@ def check_length(code: str, tokenizer, prompt_tokens: int,
     return completion_len >= min_completion_tokens
 
 
-
 def cmd_compile(args):
     samples = load_jsonl(args.input_file)
     kept = [s for s in samples if check_compile(s["content"])]
@@ -62,7 +66,6 @@ def cmd_compile(args):
     print(f"Input:  {len(samples)}")
     print(f"Passed: {len(kept)} ({rate:.1f}%)")
     print(f"Output: {args.output_file}")
-
 
 
 def cmd_quality(args):
@@ -102,7 +105,6 @@ def cmd_quality(args):
     for reason, cnt in sorted(reject_counts.items()):
         print(f"  Rejected [{reason}]: {cnt}")
     print(f"Output: {args.output_file}")
-
 
 
 def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device, token_sequences=None):
@@ -159,6 +161,7 @@ def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device
 
 
 def cmd_score_ppl(args):
+    import numpy as np
     import torch
     from tqdm import tqdm
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -213,7 +216,6 @@ def cmd_score_ppl(args):
     print(f"Output: {args.output_file}")
 
 
-
 BINARY_TEMPLATE = "\n# quality: "
 
 
@@ -250,6 +252,7 @@ def score_binary_batch(texts, model, tokenizer, template_ids, good_id, bad_id,
 
 
 def cmd_score_binary(args):
+    import numpy as np
     import torch
     from tqdm import tqdm
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -315,8 +318,8 @@ def cmd_score_binary(args):
     print(f"Output: {args.output_file}")
 
 
-
 def cmd_filter_topk(args):
+    import numpy as np
     if not 0 < args.top_percent <= 100:
         raise ValueError("--top_percent must be in (0, 100]")
 
@@ -354,8 +357,245 @@ def cmd_filter_topk(args):
     print(f"Output: {args.output_file}")
 
 
+EXECUTION_RUNNER = """
+import json
+import os
+import signal
+import sys
 
-def main():
+payload = json.load(sys.stdin)
+exit_process = os._exit
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
+scope = {'__name__': '__main__'}
+signal.signal(signal.SIGALRM, lambda *_: exit_process(29))
+signal.setitimer(signal.ITIMER_REAL, payload['timeout'])
+try:
+    exec(compile(payload['content'], '<candidate>', 'exec'), scope)
+    if payload.get('test_code'):
+        exec(compile(payload['test_code'], '<tests>', 'exec'), scope)
+except ModuleNotFoundError:
+    exit_process(21)
+except ImportError:
+    exit_process(20)
+except (SyntaxError, IndentationError):
+    exit_process(22)
+except NameError:
+    exit_process(23)
+except AttributeError:
+    exit_process(24)
+except TypeError:
+    exit_process(25)
+except ValueError:
+    exit_process(26)
+except AssertionError:
+    exit_process(28)
+except BaseException:
+    exit_process(27)
+exit_process(0)
+"""
+
+EXECUTION_STATUSES = {
+    0: "ok", 20: "ImportError", 21: "ModuleNotFoundError",
+    22: "SyntaxError", 23: "NameError", 24: "AttributeError",
+    25: "TypeError", 26: "ValueError", 27: "other_error",
+    28: "AssertionError", 29: "timeout", 137: "resource_limit",
+}
+
+
+class ExecutionVerifier:
+    def __init__(self, image="python:3.11-slim", timeout=5):
+        if timeout <= 0:
+            raise ValueError("Execution timeout must be positive")
+        result = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+            check=True, capture_output=True, text=True, timeout=30,
+        )
+        self.image = result.stdout.strip()
+        if not self.image.startswith("sha256:"):
+            raise RuntimeError("Cannot resolve the local execution image")
+        self.timeout = timeout
+
+    def __call__(self, sample):
+        name = "retraining-" + uuid.uuid4().hex
+        command = [
+            "docker", "run", "--rm", "--pull", "never", "--name", name,
+            "--network", "none", "--read-only", "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges", "--pids-limit", "64",
+            "--memory", "512m", "--memory-swap", "512m", "--cpus", "1",
+            "--user", "65534:65534", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
+            "--env", "PYTHONDONTWRITEBYTECODE=1", "-i", self.image,
+            "python", "-I", "-c", EXECUTION_RUNNER,
+        ]
+        try:
+            result = subprocess.run(
+                command, input=json.dumps(dict(sample, timeout=self.timeout)), text=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                timeout=self.timeout + 30,
+            )
+            if result.returncode in (125, 126, 127):
+                raise RuntimeError(f"Execution container failed: {result.stderr.strip()}")
+            return EXECUTION_STATUSES.get(result.returncode, "other_error")
+        except subprocess.TimeoutExpired:
+            return "container_timeout"
+        finally:
+            cleanup = subprocess.run(
+                ["docker", "rm", "--force", name],
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                text=True, timeout=15,
+            )
+            if cleanup.returncode and "No such container" not in cleanup.stderr:
+                raise RuntimeError(f"Execution cleanup failed: {cleanup.stderr.strip()}")
+
+
+def write_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def file_hash(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def content_hash(row):
+    return hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
+
+
+def select_ranked(args):
+    rows = load_jsonl(args.input)
+    target = int(len(rows) * args.fraction)
+    if target != args.count:
+        raise ValueError(f"Retained fraction gives {target} samples, expected {args.count}")
+    field = "ppl" if args.gate == "ppl" else "score"
+    valid = [row for row in rows if math.isfinite(row.get(field, float("nan")))]
+    if len(valid) < target:
+        raise ValueError(f"Only {len(valid)} finite scores for {target} required samples")
+    ranked = sorted(valid, key=lambda row: row[field], reverse=args.gate == "binary")
+    selected = ranked[:target]
+    write_jsonl(selected, args.output)
+    values = sorted(row[field] for row in valid)
+    write_json(args.report, {
+        "gate": args.gate,
+        "generated": len(rows), "gate_passed": target, "selected": target,
+        "raw_gate_pass_rate": target / len(rows),
+        "retained_fraction": target / len(rows),
+        "candidates_per_5000_accepted": len(rows) * 5000 / target,
+        "expected_candidates_per_5000": len(rows) * 5000 / target,
+        "invalid_scores": len(rows) - len(valid),
+        "score_min": values[0], "score_median": values[len(values) // 2],
+        "score_max": values[-1], "selection_threshold": selected[-1][field],
+        "binary_positive_score_fraction": (
+            sum(row[field] > 0 for row in valid) / len(valid) if args.gate == "binary" else None
+        ),
+        "input_sha256": file_hash(args.input),
+    })
+
+
+def mixture_counts(total, anchor_fraction, nl_fraction):
+    if total <= 0 or not 0 <= anchor_fraction < 1 or not 0 <= nl_fraction < 1:
+        raise ValueError("Invalid mixture size or fraction")
+    anchor_count = round(total * anchor_fraction)
+    nl_count = round(total * nl_fraction)
+    code_count = total - anchor_count - nl_count
+    if code_count <= 0:
+        raise ValueError("The training mixture must contain synthetic code")
+    return code_count, anchor_count, nl_count
+
+
+def mix_training_data(args):
+    code_count, anchor_count, nl_count = mixture_counts(args.count, args.anchor_fraction, args.nl_fraction)
+    synthetic = load_jsonl(args.input)
+    rng = random.Random(args.seed)
+    if len(synthetic) < code_count:
+        raise ValueError("Not enough selected synthetic samples")
+    rows = [dict(row, training_source="synthetic") for row in rng.sample(synthetic, code_count)]
+    sources = {}
+    if anchor_count:
+        if not args.anchor:
+            raise ValueError("An external verified anchor JSONL is required")
+        anchors = load_jsonl(args.anchor)
+        if any(row.get("verified") is not True for row in anchors):
+            raise ValueError("Every anchor row must contain verified: true")
+        if len({content_hash(row) for row in anchors}) != len(anchors):
+            raise ValueError("Anchor contents must be unique across rounds")
+        order = list(range(len(anchors)))
+        random.Random(args.anchor_seed).shuffle(order)
+        start = (args.round - 1) * anchor_count
+        chosen = [anchors[index] for index in order[start:start + anchor_count]]
+        if len(chosen) != anchor_count:
+            raise ValueError("Not enough fresh anchors for this round")
+        occupied = {content_hash(row) for row in synthetic}
+        if any(content_hash(row) in occupied for row in chosen):
+            raise ValueError("Anchor content overlaps the synthetic set")
+        rows.extend(dict(row, training_source="verified_anchor") for row in chosen)
+        sources["anchor_sha256"] = file_hash(args.anchor)
+        sources["anchor_content_sha256"] = [content_hash(row) for row in chosen]
+    if nl_count:
+        if not args.natural_language:
+            raise ValueError("A code-related natural-language JSONL is required")
+        natural_language = load_jsonl(args.natural_language)
+        eligible = [row for row in natural_language if row.get("round", args.round) == args.round]
+        if len(eligible) < nl_count:
+            raise ValueError("Not enough natural-language samples for this round")
+        chosen = rng.sample(eligible, nl_count)
+        rows.extend(dict(row, training_source="natural_language") for row in chosen)
+        sources["natural_language_sha256"] = file_hash(args.natural_language)
+    rng.shuffle(rows)
+    if any(not isinstance(row.get("content"), str) or not row["content"].strip() for row in rows):
+        raise ValueError("Training rows must contain nonempty content strings")
+    if any(row.get("test_code") is not None and not isinstance(row["test_code"], str) for row in rows):
+        raise ValueError("test_code must be a string when supplied")
+    training_rows = [{"content": row["content"], "training_source": row["training_source"],
+                      "source_sha256": content_hash(row), "test_code": row.get("test_code") or ""} for row in rows]
+    write_jsonl(training_rows, args.output)
+    write_json(args.report, {
+        "round": args.round, "seed": args.seed, "count": len(rows),
+        "synthetic_selected": len(synthetic), "synthetic_used": code_count,
+        "anchor_count": anchor_count, "natural_language_count": nl_count,
+        "anchor_fraction": anchor_count / len(rows),
+        "natural_language_fraction": nl_count / len(rows),
+        "synthetic_sha256": file_hash(args.input), **sources,
+    })
+
+
+def analyze_execution(args):
+    rows = load_jsonl(args.input)
+    if not rows:
+        raise ValueError("Cannot analyze an empty candidate set")
+    indices = random.Random(args.seed).sample(range(len(rows)), min(args.count, len(rows)))
+    sampled = [rows[index] for index in indices]
+    verifier = ExecutionVerifier(args.image, args.timeout)
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        statuses = list(executor.map(verifier, sampled))
+    counts = Counter(statuses)
+    compiled = 0
+    for row in sampled:
+        try:
+            compile(row["content"], "<candidate>", "exec")
+            compiled += 1
+        except (SyntaxError, ValueError, OverflowError):
+            pass
+    relaxed = counts["ok"] + counts["ImportError"] + counts["ModuleNotFoundError"]
+    write_json(args.report, {
+        "input_sha256": file_hash(args.input), "population": len(rows),
+        "evaluated": len(sampled), "seed": args.seed, "timeout_seconds": args.timeout,
+        "image": verifier.image, "counts": dict(counts),
+        "compile_rate": compiled / len(sampled),
+        "execution_strict_rate": counts["ok"] / len(sampled),
+        "execution_relaxed_rate": relaxed / len(sampled),
+        "samples_with_test_code": sum(bool(row.get("test_code")) for row in sampled),
+        "sample_indices": indices, "statuses": statuses,
+    })
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Self-play data filtering (V2)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -396,7 +636,7 @@ def main():
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--max_content_tokens", type=int, default=2000)
 
-    p = sub.add_parser("filter-topk", help="Keep top K% by score field")
+    p = sub.add_parser("filter-topk", help="Keep top K%% by score field")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
     p.add_argument("--score_field", required=True,
@@ -406,7 +646,43 @@ def main():
                    help="Sort ascending (lower=better, e.g. PPL). "
                         "Default: descending (higher=better, e.g. binary score)")
 
-    args = parser.parse_args()
+    ranked = sub.add_parser("rank")
+    ranked.add_argument("--gate", required=True, choices=["ppl", "binary"])
+    ranked.add_argument("--fraction", type=float, default=0.25)
+    mixed = sub.add_parser("mix")
+    mixed.add_argument("--anchor")
+    mixed.add_argument("--anchor_fraction", type=float, default=0)
+    mixed.add_argument("--anchor_seed", type=int, default=0)
+    mixed.add_argument("--natural_language")
+    mixed.add_argument("--nl_fraction", type=float, default=0)
+    mixed.add_argument("--round", type=int, required=True)
+    mixed.add_argument("--seed", type=int, default=0)
+    execution = sub.add_parser("execution")
+    execution.add_argument("--image", default="python:3.11-slim")
+    execution.add_argument("--timeout", type=float, default=5)
+    execution.add_argument("--workers", type=int, default=4)
+    execution.add_argument("--seed", type=int, default=0)
+    for command in [ranked, mixed, execution]:
+        command.add_argument("--input", required=True)
+        command.add_argument("--report", required=True)
+        command.add_argument("--count", type=int, default=500 if command is execution else 5000)
+    for command in [ranked, mixed]:
+        command.add_argument("--output", required=True)
+
+    args = parser.parse_args(argv)
+    if args.command in {"rank", "mix", "execution"} and args.count <= 0:
+        parser.error("--count must be positive")
+    if args.command == "rank" and not 0 < args.fraction <= 1:
+        parser.error("--fraction must be in (0, 1]")
+    if args.command == "mix" and args.round < 1:
+        parser.error("--round must be positive")
+    if args.command == "execution" and args.workers < 1:
+        parser.error("--workers must be positive")
+    return args
+
+
+def main():
+    args = parse_args()
 
     dispatch = {
         "compile": cmd_compile,
@@ -414,6 +690,9 @@ def main():
         "score-ppl": cmd_score_ppl,
         "score-binary": cmd_score_binary,
         "filter-topk": cmd_filter_topk,
+        "rank": select_ranked,
+        "mix": mix_training_data,
+        "execution": analyze_execution,
     }
     dispatch[args.command](args)
 
