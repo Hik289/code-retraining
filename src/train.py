@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import random
 
@@ -49,6 +50,7 @@ def get_args():
                         help="Validation set size (0 = no validation)")
 
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--metrics_file", type=str)
     parser.add_argument("--eval_freq", type=int, default=1000)
     parser.add_argument("--save_freq", type=int, default=1000)
     parser.add_argument("--log_freq", type=int, default=100)
@@ -248,7 +250,7 @@ def run_training(args):
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    trainer.train()
+    train_result = trainer.train()
 
     if torch.cuda.is_available():
         peak_mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
@@ -263,7 +265,6 @@ def run_training(args):
         trainer.save_model(final_ckpt)
         tokenizer.save_pretrained(final_ckpt)
 
-        import json
         gen_cfg_path = os.path.join(final_ckpt, "generation_config.json")
         if os.path.exists(gen_cfg_path):
             with open(gen_cfg_path) as f:
@@ -278,6 +279,11 @@ def run_training(args):
     log_history = trainer.state.log_history
     train_losses = [e["loss"] for e in log_history if "loss" in e]
     final_loss = train_losses[-1] if train_losses else None
+    if args.metrics_file:
+        os.makedirs(os.path.dirname(args.metrics_file) or ".", exist_ok=True)
+        with open(args.metrics_file, "w") as stream:
+            json.dump({**train_result.metrics, "final_logged_loss": final_loss,
+                       "global_step": trainer.state.global_step, "seed": args.seed}, stream, indent=2)
     print("\nTraining complete.")
     print(f"Final loss: {final_loss}")
     if not args.skip_final_save:

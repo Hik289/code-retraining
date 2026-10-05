@@ -6,7 +6,7 @@ import sys
 import torch
 from huggingface_hub import hf_hub_download
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_DIR not in sys.path:
@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.2,
                         help="Sampling temperature (0.0 = greedy)")
     parser.add_argument("--top_p", type=float, default=0.95)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--n_samples", type=int, default=1,
                         help="Number of samples per problem")
     parser.add_argument("--timeout", type=int, default=6,
@@ -219,6 +220,7 @@ def run_evaluate(args, benchmark, save_results):
 
 def main():
     args = parse_args()
+    set_seed(args.seed)
     cfg = load_model_config(args.config)
     model_path = args.model_path or cfg["model_id"]
     os.makedirs(args.output_dir, exist_ok=True)
@@ -256,10 +258,12 @@ def main():
         json.dump(metrics, f, indent=2)
 
     scores = {
-        "livecodebench_pass1": round(pass1, 4),
+        "livecodebench_pass1": pass1,
         "model": cfg["short_name"],
         "model_path": model_path,
         "release_version": args.release_version,
+        "seed": args.seed,
+        "top_p": args.top_p,
         "temperature": args.temperature,
         "n_samples": args.n_samples,
         "num_problems": len(benchmark),

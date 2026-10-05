@@ -4,7 +4,7 @@ import os
 
 import torch
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
 
 from src.config import load_model_config
 
@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.2,
                         help="Sampling temperature (0.0 = greedy)")
     parser.add_argument("--top_p", type=float, default=0.95)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--n_samples", type=int, default=1,
                         help="Number of samples per task")
     parser.add_argument("--limit", type=int, default=None,
@@ -106,7 +107,7 @@ def generate_samples(args, cfg):
     return results
 
 
-def run_evaluate(samples_file, dataset):
+def run_evaluate(samples_file, dataset, expected_samples=None):
     result_path = samples_file.replace(".jsonl", "_eval_results.json")
     if os.path.isfile(result_path):
         os.remove(result_path)
@@ -138,14 +139,17 @@ def run_evaluate(samples_file, dataset):
         base_pass += sum(r.get("base_status") == "pass" for r in task_results)
         plus_pass += sum(r.get("plus_status") == "pass" for r in task_results)
 
-    scores[f"{dataset}_pass1"] = round(base_pass / n_samples, 4) if n_samples else 0.0
-    scores[f"{dataset}_plus_pass1"] = round(plus_pass / n_samples, 4) if n_samples else 0.0
+    if expected_samples is not None and n_samples != expected_samples:
+        raise ValueError(f"Evaluated {n_samples} samples, expected {expected_samples}")
+    scores[f"{dataset}_pass1"] = base_pass / n_samples if n_samples else 0.0
+    scores[f"{dataset}_plus_pass1"] = plus_pass / n_samples if n_samples else 0.0
 
     return scores
 
 
 def main():
     args = parse_args()
+    set_seed(args.seed)
     cfg = load_model_config(args.config)
     model_path = args.model_path or cfg["model_id"]
 
@@ -171,7 +175,7 @@ def main():
         }
     else:
         print("\nRunning EvalPlus evaluation...")
-        scores = run_evaluate(args.output_file, args.dataset)
+        scores = run_evaluate(args.output_file, args.dataset, expected_samples=len(results))
     for k, v in scores.items():
         if isinstance(v, (float, int)):
             print(f"  {k}: {v:.4f}")
@@ -182,6 +186,8 @@ def main():
     scores["model"] = cfg["short_name"]
     scores["model_path"] = model_path
     scores["dataset"] = args.dataset
+    scores["seed"] = args.seed
+    scores["top_p"] = args.top_p
     scores["temperature"] = args.temperature
     scores["n_samples"] = args.n_samples
     with open(scores_file, "w") as f:

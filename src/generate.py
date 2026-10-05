@@ -39,14 +39,14 @@ def check_length(code: str, prompt_tokens: int, tokenizer,
 
 
 def apply_filter(text, filter_mode, prompt_tokens, tokenizer,
-                 repetition_threshold=0.5, min_completion_tokens=50):
+                 repetition_threshold=0.3, min_completion_tokens=50):
     if filter_mode is None:
         return True, None
 
-    if not check_compile(text):
+    if filter_mode in ("compile", "compile+quality") and not check_compile(text):
         return False, "compile"
 
-    if filter_mode == "compile+quality":
+    if filter_mode in ("quality", "compile+quality"):
         if not check_repetition(text, threshold=repetition_threshold):
             return False, "repetition"
         if not check_length(text, prompt_tokens, tokenizer,
@@ -112,9 +112,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=1)
 
     parser.add_argument("--filter_mode", type=str, default=None,
-                        choices=["compile", "compile+quality"],
+                        choices=["compile", "quality", "compile+quality"],
                         help="Inline filter mode (omit for no filtering)")
-    parser.add_argument("--repetition_threshold", type=float, default=0.5)
+    parser.add_argument("--repetition_threshold", type=float, default=0.3)
     parser.add_argument("--min_completion_tokens", type=int, default=50)
 
     return parser.parse_args()

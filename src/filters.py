@@ -30,7 +30,7 @@ def check_compile(code: str) -> bool:
     try:
         compile(code, "<string>", "exec")
         return True
-    except SyntaxError:
+    except (SyntaxError, ValueError, OverflowError):
         return False
 
 
@@ -81,13 +81,13 @@ def cmd_quality(args):
 
     for s in samples:
         text = s["content"]
-        if not check_compile(text):
+        if args.require_compile and not check_compile(text):
             reject_counts["compile"] += 1
             continue
         if not check_repetition(text, threshold=args.repetition_threshold):
             reject_counts["repetition"] += 1
             continue
-        if not check_length(text, tokenizer, args.prompt_tokens,
+        if not check_length(text, tokenizer, s.get("prompt_tokens", args.prompt_tokens),
                             min_completion_tokens=args.min_completion_tokens):
             reject_counts["length"] += 1
             continue
@@ -96,7 +96,7 @@ def cmd_quality(args):
     write_jsonl(kept, args.output_file)
 
     rate = len(kept) / len(samples) * 100 if samples else 0
-    print("\n===== Quality Filter (compile + repetition + length) =====")
+    print("\n===== Quality Filter =====")
     print(f"Input:  {len(samples)}")
     print(f"Passed: {len(kept)} ({rate:.1f}%)")
     for reason, cnt in sorted(reject_counts.items()):
@@ -105,13 +105,20 @@ def cmd_quality(args):
 
 
 
-def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device):
+def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device, token_sequences=None):
     import torch
 
-    encodings = tokenizer(
-        texts, return_tensors="pt", padding=True,
-        truncation=True, max_length=max_length,
-    ).to(device)
+    if token_sequences is None:
+        encodings = tokenizer(
+            texts, return_tensors="pt", padding=True,
+            truncation=True, max_length=max_length,
+        ).to(device)
+    else:
+        sequences = [ids[:max_length] for ids in token_sequences]
+        encodings = tokenizer.pad(
+            [{"input_ids": ids, "attention_mask": [1] * len(ids)} for ids in sequences],
+            padding=True, return_tensors="pt",
+        ).to(device)
 
     input_ids = encodings["input_ids"]
     attention_mask = encodings["attention_mask"]
@@ -120,7 +127,8 @@ def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device
     labels[attention_mask == 0] = -100
     for i in range(labels.size(0)):
         real_start = (attention_mask[i] == 0).sum().item()
-        mask_end = min(real_start + prompt_tokens, labels.size(1))
+        prefix_length = prompt_tokens[i] if isinstance(prompt_tokens, list) else prompt_tokens
+        mask_end = min(real_start + prefix_length, labels.size(1))
         labels[i, :mask_end] = -100
 
     with torch.no_grad():
@@ -145,7 +153,7 @@ def compute_ppl_batch(texts, model, tokenizer, prompt_tokens, max_length, device
             ppls.append(float("inf"))
         else:
             mean_loss = per_token_loss[i][sample_mask].mean().item()
-            ppls.append(math.exp(mean_loss))
+            ppls.append(math.exp(mean_loss) if mean_loss < 709 else float("inf"))
 
     return ppls
 
@@ -180,8 +188,13 @@ def cmd_score_ppl(args):
     for i in tqdm(range(0, len(samples), args.batch_size), desc="Scoring PPL"):
         batch = samples[i:i + args.batch_size]
         texts = [s["content"] for s in batch]
+        prefixes = [s.get("prompt_tokens", args.prompt_tokens) for s in batch]
+        token_sequences = None
+        if all("prompt_token_ids" in s and "completion_token_ids" in s for s in batch):
+            token_sequences = [s["prompt_token_ids"] + s["completion_token_ids"] for s in batch]
+            prefixes = [len(s["prompt_token_ids"]) for s in batch]
         ppls = compute_ppl_batch(texts, model, tokenizer,
-                                 args.prompt_tokens, args.max_length, device)
+                                 prefixes, args.max_length, device, token_sequences)
         all_ppls.extend(ppls)
 
     for sample, ppl in zip(samples, all_ppls):
@@ -279,7 +292,7 @@ def cmd_score_binary(args):
     all_scores = []
     for i in tqdm(range(0, len(samples), args.batch_size), desc="Scoring binary"):
         batch = samples[i:i + args.batch_size]
-        texts = [s["content"] for s in batch]
+        texts = [s.get("completion", s["content"]) for s in batch]
         scores = score_binary_batch(
             texts, model, tokenizer, template_ids,
             good_id, bad_id, args.max_content_tokens, device,
@@ -316,7 +329,9 @@ def cmd_filter_topk(args):
 
     valid.sort(key=lambda x: x[1][field], reverse=(not args.ascending))
 
-    keep_count = max(1, int(len(valid) * args.top_percent / 100))
+    keep_count = max(1, int(len(samples) * args.top_percent / 100))
+    if len(valid) < keep_count:
+        raise ValueError(f"Only {len(valid)} finite scores for {keep_count} required samples")
     kept = valid[:keep_count]
 
     out_samples = []
@@ -351,14 +366,15 @@ def main():
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
 
-    p = sub.add_parser("quality", help="compile + repetition + length check")
+    p = sub.add_parser("quality", help="Repetition and length checks, optionally with compilation")
     p.add_argument("--input_file", required=True)
     p.add_argument("--output_file", required=True)
     p.add_argument("--config", required=True, help="Model config YAML")
     p.add_argument("--model_path", default=None,
                    help="HF model ID or local path (default: config model_id)")
     p.add_argument("--prompt_tokens", type=int, default=1024)
-    p.add_argument("--repetition_threshold", type=float, default=0.5)
+    p.add_argument("--require_compile", action="store_true")
+    p.add_argument("--repetition_threshold", type=float, default=0.3)
     p.add_argument("--min_completion_tokens", type=int, default=50)
 
     p = sub.add_parser("score-ppl", help="Score samples by PPL (needs GPU)")

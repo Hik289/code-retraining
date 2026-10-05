@@ -328,7 +328,7 @@ for ROUND in $(seq 1 "$ROUNDS"); do
                     --prompt_tokens "$PROMPT_TOKENS" \
                     --max_new_tokens "$GEN_MAX_NEW_TOKENS" \
                     --batch_size "$GEN_BATCH_SIZE" \
-                    --filter_mode compile+quality
+                    --filter_mode quality
                 ;;
             ppl)
                 python src/generate.py \
